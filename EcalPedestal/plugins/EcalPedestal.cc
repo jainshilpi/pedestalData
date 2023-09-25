@@ -68,7 +68,8 @@ EcalPedestal::EcalPedestal( const edm::ParameterSet& iConfig )
       //ebRecHitCollection_(consumes<EcalRecHitCollection>(iConfig.getParameter<edm::InputTag>("ebRecHitCollection"))),
       //eeRecHitCollection_(consumes<EcalRecHitCollection>(iConfig.getParameter<edm::InputTag>("eeRecHitCollection"))),
       ebRecHitCollection_(consumes<EcalRecHitCollection>(edm::InputTag("ecalRecHit", "EcalRecHitsEB"))),
-      eeRecHitCollection_(consumes<EcalRecHitCollection>(edm::InputTag("ecalRecHit", "EcalRecHitsEE"))), 
+      eeRecHitCollection_(consumes<EcalRecHitCollection>(edm::InputTag("ecalRecHit", "EcalRecHitsEE"))),
+      geometryToken_(esConsumes()), 
       ChannelStatusToken(esConsumes()),
       tok_ecalPFRecHitThresholds_(esConsumes<EcalPFRecHitThresholds, EcalPFRecHitThresholdsRcd>())
 
@@ -221,6 +222,8 @@ void EcalPedestal::beginJob() {
   tree->Branch("hitsAmplitudes",         &hitsAmplitudes_);
   tree->Branch("hitsEnergy",         &hitsEnergy_);
   tree->Branch("hitsThr",         &hitsThr_);
+  tree->Branch("hitsEta",         &hitsEta_);
+  tree->Branch("hitsPhi",         &hitsPhi_);
   tree->Branch("nCrys",         &nCrys_);
   
   nEntriesStandard_.resize(kEBChannels*kGains, 0);
@@ -1424,9 +1427,13 @@ EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup )
   hitsAmplitudes_.clear();
   hitsEnergy_.clear();
   hitsThr_.clear();
+  hitsEta_.clear();
+  hitsPhi_.clear();
   nCrys_ = 0;
   
 
+  // get geometry
+  const CaloGeometry* geo = &iSetup.getData(geometryToken_);
   
    edm::Handle<EcalRecHitCollection> barrelRecHitsHandle;
    edm::Handle<EcalRecHitCollection> endcapRecHitsHandle;
@@ -1684,8 +1691,28 @@ EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup )
 	} else {
 	  rechitEn =  0;
 	}
-      
+
+	//cout<<"rhEn "<<rechitEn<<endl;
+	if(rechitEn==0) continue;
 	
+	///eta phi
+	EBDetId det = it->id();
+	//cout<<"getting Global point"<<endl;
+	//cout<<"det ieta iphi "<<ieta<<" "<<iphi<<endl;
+	///https://cmssdt.cern.ch/lxr/source/RecoMET/METFilters/plugins/EcalBadCalibFilter.cc
+
+	double rheta = -99;
+	double rhphi = -99;
+	if (! (it == barrelRecHitsHandle->end()) ){ 
+	  const GlobalPoint & rechitPoint = geo->getPosition(det);
+	  //std::cout<<"Printing the values "<<endl;
+	  
+	  
+	  double rheta = rechitPoint.eta();
+	  double rhphi = rechitPoint.phi();
+	  
+	  //std::cout<<"Eta : Phi "<<rheta<<" "<<rhphi<<std::endl;
+	}
 
 	////////////SJ
 	
@@ -1860,7 +1887,8 @@ EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup )
 	///SJ
 	hitsThr_.push_back(rhThres);
 	hitsEnergy_.push_back(rechitEn);      
-
+	hitsEta_.push_back(rheta);
+	hitsPhi_.push_back(rhphi);
 	//std::cout<<"thres and en "<<rhThres<<" "<<rechitEn<<std::endl;
       }  // loop over digis
 
@@ -1944,7 +1972,20 @@ EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup )
 	} else {
 	  rechitEn =  0;
 	}
-	
+
+	if(rechitEn==0) continue; 
+
+	///eta phi
+	EEDetId det = it->id();
+
+	double rheta = -99;
+	double rhphi = -99; 
+
+	if (! (it == endcapRecHitsHandle->end()) ){  
+	  const GlobalPoint & rechitPoint = geo->getPosition(det);
+	  rheta = rechitPoint.eta();
+	  rhphi = rechitPoint.phi();
+	}
 
 	////////////SJ
 
@@ -2078,6 +2119,10 @@ EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup )
 	///SJ
 	hitsThr_.push_back(rhThres);
 	hitsEnergy_.push_back(rechitEn);      
+
+	hitsEta_.push_back(rheta);
+	hitsPhi_.push_back(rhphi);
+	
       }  // loop over digis
 
       /// SJ

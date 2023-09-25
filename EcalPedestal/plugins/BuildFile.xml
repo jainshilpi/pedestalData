@@ -1,0 +1,25 @@
+<use   name="FWCore/Framework"/>
+<use   name="FWCore/ParameterSet"/>
+<use   name="FWCore/MessageLogger"/>
+<use   name="FWCore/MessageService"/>
+<use   name="DataFormats/EcalDigi"/>
+<use   name="DataFormats/EcalRecHit"/>
+<use   name="DataFormats/EcalDetId"/>
+<use   name="TBDataFormats/EcalTBObjects"/>
+<use   name="CondFormats/EcalObjects"/>
+<use   name="CondFormats/DataRecord"/>
+<use   name="RecoLocalCalo/EcalRecAlgos"/>
+<use   name="Geometry/EcalMapping"/>
+<use   name="Geometry/CaloTopology"/>
+<use   name="CaloOnlineTools/EcalTools"/>
+<use   name="OnlineDB/EcalCondDB"/>
+<use   name="OnlineDB/Oracle"/>
+<use  name="FWCore/ServiceRegistry"/>
+<use  name="CommonTools/UtilAlgos"/>
+<use   name="pedestalData/H4CovMat"/>
+<use   name="clhep"/>
+<flags LCG_DICT_XML="classes_def.xml"/>
+<flags   EDM_PLUGIN="1"/>
+<export>
+  <lib   name="1"/>
+</export>

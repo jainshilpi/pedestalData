@@ -1,0 +1,3525 @@
+/**\class EcalPedestal
+
+ Description: <one line class summary>
+
+ Implementation:
+     <Notes on implementation>
+*/
+//
+// $Id: EcalEcalPedestal.cc,v 0.0 2006/11/17 19:01:00 fay Exp $
+//
+//
+
+#include "Pit/Pedestal/interface/EcalPedestal.h"
+#include "Pit/H4CovMat/interface/H4CovMat.h"
+
+#include "DataFormats/EcalRecHit/interface/EcalUncalibratedRecHit.h"
+#include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
+#include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
+#include "TBDataFormats/EcalTBObjects/interface/EcalTBTDCRecInfo.h"
+#include "TBDataFormats/EcalTBObjects/interface/EcalTBEventHeader.h"
+#include "TBDataFormats/EcalTBObjects/interface/EcalTBTDCSample.h" 
+#include "TBDataFormats/EcalTBObjects/interface/EcalTBTDCRawInfo.h"
+#include "DataFormats/EcalDetId/interface/EBDetId.h"
+#include <DataFormats/EcalRawData/interface/EcalRawDataCollections.h>
+
+#include "CondFormats/EcalObjects/interface/EcalChannelStatus.h"
+#include "CondFormats/DataRecord/interface/EcalChannelStatusRcd.h"
+
+//#include<fstream>
+
+#include "TFile.h"
+#include "TH1.h"
+#include "TH2.h"
+#include "TF1.h"
+#include "TProfile.h"
+
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <stdexcept>
+
+using namespace edm;
+using namespace cms;
+using namespace std;
+  
+//
+// constants, enums and typedefs
+//
+const Int_t kSample=10;
+TProfile* hEntries;
+TH1F* hPed248;
+//TH1F* hPed248Evt;
+TH1F* hPed248LF;
+TH1F* hPed248HF;
+TH1F* hPed248Weights;
+TH1F* hPed248Max;
+//TH1F* hPed248LFEvt;
+TH1F* hPed248_3p1;
+//TH1F* hPed248_3p1Evt;
+TH2F* hPed248corr;
+TProfile* hPed248sample;
+TProfile* hPed248sampleZS;
+TH1F* hPed45784;
+//TH1F* hPed45784Evt;
+TH1F* hPed45784LF;
+TH1F* hPed45784HF;
+TH1F* hPed45784Weights;
+TH1F* hPed45784Max;
+//TH1F* hPed45784LFEvt;
+TProfile* hPed45784sample;
+TProfile* hPed45784sampleZS;
+TProfile* hPed46845sample;
+TProfile* hPed46845sampleZS;
+TProfile* hPedsample;
+//
+// static data member definitions
+//
+int SMCal[36] = {24,22,13,31,26,16, 2,11, 5, 0,29,28,14,33,32, 3, 7,19,
+		 12,17,10, 1, 8, 4,27,20,23,25, 6,34,35,15,18,30,21, 9};
+//double Weights_5[10] = {0.,     0.,    0.,    0.,0.2522048,0.3287018,0.2906976,0.2202467,0.1550057,0.};
+double Weights_5[10]   = {0.,     0.,    0.,    0.,0.0414,   0.384,    0.390,    0.244,    0.0782,   0.};
+/*
+double Weights_3g1[10] = {-0.3333,-0.3333,-0.3333,0.,     0.,     0.,     0.,       0.,      0.,      1.};
+double Weights_3g2[10] = {0.,     -0.3333,-0.3333,-0.3333,0.,     0.,     0.,       0.,      0.,      1.};
+double Weights_3g3[10] = {0.,     0.,     -0.3333,-0.3333,-0.3333,0.,     0.,       0.,      0.,      1.};
+double Weights_3g4[10] = {0.,     0.,     0.,     -0.3333,-0.3333,-0.3333,0.,       0.,      0.,      1.};
+double Weights_3g5[10] = {0.,     0.,     0.,     0.,     -0.3333,-0.3333,-0.3333,  0.,      0.,      1.};
+double Weights_3g6[10] = {0.,     0.,     0.,     0.,     0.,     -0.3333,-0.3333,-0.3333,   0.,      1.};
+double Weights_3g7[10] = {0.,     0.,     0.,     0.,     0.,     0.,     -0.3333,-0.3333,-0.3333,    1.};
+*/
+double Weights_3g1[10] = {-0.1,  0.1,   -0.1,    0.1,   -0.1,    0.1,   -0.1,      0.1,    -0.1,     0.1};
+double Weights_3g2[10] = {0.1,  -0.1,    0.1,   -0.1,    0.1,   -0.1,    0.1,     -0.1,     0.1,    -0.1};
+double Weights_3g3[10] = {-0.1, -0.1,    0.1,    0.1,   -0.1,   -0.1,    0.1,      0.1,    -0.1,     0.1};
+double Weights_3g4[10] = {-0.1, -0.1,   -0.1,    0.1,    0.1,    0.1,   -0.1,     -0.1,     0.1,     0.1};
+double Weights_3g5[10] = {-0.1, -0.1,   -0.1,   -0.1,    0.1,    0.1,    0.1,      0.1,    -0.1,     0.1};
+double Weights_3g6[10] = {-0.1, -0.1,   -0.1,   -0.1,   -0.1,    0.1,    0.1,      0.1,     0.1,     0.1};
+double Weights_3g7[10] = {0.1,   0.1,    0.1,    0.1,    0.1,   -0.1,   -0.1,     -0.1,    -0.1,    -0.1};
+/*
+double Weights_3g1[10] = {-0.3333,-0.3333,-0.3333,0.,     0.,     1.,0.,     0.,       0.,      0};
+double Weights_3g2[10] = {0.,     -0.3333,-0.3333,-0.3333,0.,     1.,0.,     0.,       0.,      0};
+double Weights_3g3[10] = {0.,     0.,     -0.3333,-0.3333,-0.3333,1.,0.,     0.,       0.,      0};
+double Weights_3g4[10] = {0.,     0.,     0.,     -0.3333,-0.3333,1.,-0.3333,0.,       0.,      0};
+double Weights_3g5[10] = {0.,     0.,     0.,     0.,     -0.3333,1.,-0.3333,-0.3333,  0.,      0};
+double Weights_3g6[10] = {0.,     0.,     0.,     0.,     0.,     1.,-0.3333,-0.3333,-0.3333,   0};
+double Weights_3g7[10] = {0.,     0.,     0.,     0.,     0.,     1.,0.,     -0.3333,-0.3333,-0.3333};
+*/
+/*
+double Weights_2p1[10] = {-0.50,-0.50,   0.,  0.,    0.,       1.,        0.,       0.,      0.,      0.};
+double Weights_3p1[10] = {-0.3333,-0.3333,-0.3333,0.,0.,       1.,        0.,       0.,      0.,      0.};
+double Weights_4p1[10] = {-0.25,-0.25,-0.25,-0.25,   0.,       1.,        0.,       0.,      0.,      0.};
+double Weights_5p1[10] = {-0.20,   -0.20,   -0.20,   -0.20,   -0.20,   1.,0.,       0.,      0.,      0.};
+double Weights_6p1[10] = {-0.1667, -0.1667, -0.1667, -0.1667, -0.1667, 1.,-0.1667,  0.,      0.,      0.};
+double Weights_7p1[10] = {-0.14286,-0.14286,-0.14286,-0.14286,-0.14286,1.,-0.14286,-0.14286, 0.,      0.};
+double Weights_8p1[10] = {-0.125,  -0.125,  -0.125,  -0.125,  -0.125,  1.,-0.125,  -0.125,  -0.125,   0.};
+double Weights_9p1[10] = {-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,1.,-0.11111,-0.11111,-0.11111,-0.11111};
+*/
+/*
+double Weights_2p1[10] = {-0.50,-0.50,   0.,  0.,    0.,        0.,       0.,      0.,      0.,       1.};
+double Weights_3p1[10] = {-0.3333,-0.3333,-0.3333,0.,0.,        0.,       0.,      0.,      0.,       1.};
+double Weights_4p1[10] = {-0.25,-0.25,-0.25,-0.25,   0.,        0.,       0.,      0.,      0.,       1.};
+double Weights_5p1[10] = {-0.20,   -0.20,   -0.20,   -0.20,   -0.20, 0.,       0.,      0.,      0.,  1.};
+double Weights_6p1[10] = {-0.1667, -0.1667, -0.1667, -0.1667, -0.1667,-0.1667,  0.,      0.,      0., 1.};
+double Weights_7p1[10] = {-0.14286,-0.14286,-0.14286,-0.14286,-0.14286,-0.14286,-0.14286, 0.,      0.,1.};
+double Weights_8p1[10] = {-0.125,  -0.125,  -0.125,  -0.125,  -0.125,-0.125,  -0.125,  -0.125,   0.,  1.};
+double Weights_9p1[10] = {-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,1.};
+*/
+double Weights_3p5[10] = {-0.379, -0.379, -0.379,  0,      0.0414,0.384,  0.390, 0.244,      0.0782,  0.};
+// Philippe Gras' weights
+//double Weights_2p1[10] = { 0.,     -0.3738, -0.3738,-0.3632,  0.2719,  0.4678,  0.372,   0.,     0.,  0.};
+// Nuno's weights
+double Weights_2p1[10] = {0.,  -0.373806, -0.373806, -0.363226, 0.270194, 0.468613, 0.372032, 0., 0., 0.};
+//double Weights_2p1[10] = {-0.50,-0.50,   0.,  0.,    1.,       0.,        0.,       0.,      0.,      0.};
+double Weights_3p1[10] = {-0.3333,-0.3333,-0.3333,0.,0.,       1.,        0.,       0.,      0.,      0.};
+double Weights_4p1[10] = {-0.25,-0.25,-0.25,-0.25,   0.,       0.,        1.,       0.,      0.,      0.};
+double Weights_5p1[10] = {-0.20,   -0.20,   -0.20,   -0.20,   -0.20, 0.,  0.,       1.,      0.,      0.};
+double Weights_6p1[10] = {-0.1667, -0.1667, -0.1667, -0.1667, -0.1667,-0.1667,  0., 0.,      1.,      0.};
+double Weights_7p1[10] = {-0.14286,-0.14286,-0.14286,-0.14286,-0.14286,-0.14286,-0.14286, 0.,0.,      1.};
+double Weights_8p1[10] = {-0.125,  -0.125,  -0.125,  -0.125,  -0.125,-0.125,  -0.125,  -0.125,   0.,  1.};
+double Weights_9p1[10] = {-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,-0.11111,1.};
+
+vector<H4CovMat*>* vCovMatEB;
+vector<H4CovMat*>* vCovMatEE;
+
+// Sinusoidal pattern noise
+//vector<int> SinChannels;
+vector<Int_t> entriesSin;
+vector<Int_t> entriesLarge;
+vector<Double_t> phaseMean;
+vector<Double_t> freqMean;
+vector<Double_t> freqMean2;
+vector<Double_t> ampMean;
+int gainValues[3] = {12, 6, 1};
+TH1F** hMaxMin = new TH1F*[3];
+TH1F** hEvent = new TH1F*[3];
+TH1F** hFreqMhz = new TH1F*[3];
+TH1F** hPhase = new TH1F*[3];
+TH1F** hAmp = new TH1F*[3];
+TH1F** hChi2 = new TH1F*[3];
+TH1F** hChi2FF = new TH1F*[3];
+TH2F** hEBEntry = new TH2F*[3];
+TH2F** hSinusAmp = new TH2F*[3];
+TH2F** hLargeAmp = new TH2F*[3];
+
+//
+// constructors and destructor
+//
+
+
+//====================================================================
+EcalPedestal::EcalPedestal( const edm::ParameterSet& iConfig )
+//====================================================================
+{
+   //now do what ever initialization is needed   
+  //  EBDigiCollection_          = iConfig.getParameter<edm::InputTag>("EBDigiCollection");
+  EBdigiCollection_          = iConfig.getParameter<std::string>("EBdigiCollection");
+  EEdigiCollection_          = iConfig.getParameter<std::string>("EEdigiCollection");
+  digiProducer_              = iConfig.getParameter<std::string>("digiProducer");
+  hitCollection_             = iConfig.getParameter<std::string>("hitCollection");
+  EEuncalibRecHitCollection_ = iConfig.getParameter<edm::InputTag>("EEuncalibRecHitCollection");
+  EBuncalibRecHitCollection_ = iConfig.getParameter<edm::InputTag>("EBuncalibRecHitCollection");
+  hitProducer_               = iConfig.getParameter<std::string>("hitProducer");
+//  tdcRecInfoCollection_      = iConfig.getParameter<std::string>("tdcRecInfoCollection");
+//  tdcRecInfoProducer_        = iConfig.getParameter<std::string>("tdcRecInfoProducer");
+  eventHeaderCollection_     = iConfig.getParameter<std::string>("eventHeaderCollection");
+  eventHeaderProducer_       = iConfig.getParameter<std::string>("eventHeaderProducer");
+  runnumber_                 = iConfig.getUntrackedParameter<int>("runnumber",-1);
+  ECALType_                  = iConfig.getParameter<std::string>("ECALType");
+  runType_                   = iConfig.getParameter<std::string>("runType");
+  startevent_                = iConfig.getUntrackedParameter<unsigned int>("startevent", 1);
+  xtalnumber_                = iConfig.getUntrackedParameter<int>("xtalnumber",-1);
+  readPedestals_             = iConfig.getParameter<bool>("readPedestals");
+  patternNoise_              = iConfig.getParameter<bool>("patternNoise");
+
+  vector<int> listDefaults;
+  listDefaults.push_back(-1);  
+  //  maskedChannels_            = iConfig.getUntrackedParameter<vector<int> >("maskedChannels", listDefaults);
+
+  cnt_evt_ = 0;
+  //  cout << " Pattern noise analysis ? " << patternNoise_ << endl;
+
+    //  cout << "Exiting constructor" << endl;
+}//constructor
+
+
+//========================================================================
+EcalPedestal::~EcalPedestal()
+//========================================================================
+{
+  cout << "ANALYSIS FINISHED" << endl;
+}//destructor
+
+//========================================================================
+void EcalPedestal::beginRun(edm::Run const &, edm::EventSetup const & c) {
+///========================================================================
+
+  cout << "Entering beginRun" << endl;
+  edm::ESHandle< EcalElectronicsMapping > handle;
+  c.get< EcalMappingRcd >().get(handle);
+  ecalElectronicsMap_ = handle.product();
+ 
+  fedMap_ = new EcalFedMap();
+
+  edm::ESHandle<EcalChannelStatus> pChannelStatus;
+  c.get<EcalChannelStatusRcd>().get(pChannelStatus);
+  const EcalChannelStatus* chStatus = pChannelStatus.product();  
+  EcalChannelStatusMap::const_iterator chit;
+  for (int iChannel = 0; iChannel < kEBChannels; iChannel++) {
+    EBDetId id = EBDetId::unhashIndex(iChannel);
+    chit = chStatus->getMap().find(id.rawId());
+    if( chit != chStatus->getMap().end() ) {
+      EcalChannelStatusCode ch_code = (*chit);
+      uint16_t statusCode = ch_code.getStatusCode() & 31;
+      if(statusCode == 1 || (statusCode > 7 && statusCode < 12))
+	maskedChannels_.push_back(iChannel);
+    }
+  }
+  for (int iChannel = 0; iChannel < kEEChannels; iChannel++) {
+    EEDetId id = EEDetId::unhashIndex(iChannel);
+    chit = chStatus->getMap().find(id.rawId());
+    if( chit != chStatus->getMap().end() ) {
+      EcalChannelStatusCode ch_code = (*chit);
+      uint16_t statusCode = ch_code.getStatusCode() & 31;
+      if(statusCode == 1 || (statusCode > 7 && statusCode < 12))
+	maskedEEChannels_.push_back(iChannel);
+    }
+  }
+  cout << "Exiting beginRun" << endl;
+}//beginRun
+
+//========================================================================
+void EcalPedestal::beginJob() {
+///========================================================================
+
+  cout << "Entering beginJob" << endl;
+  // Amplitude vs TDC offset
+//  h_ampltdc  = new TH2F("h_ampltdc","Max Amplitude vs TDC offset", 100,0.,1.,1500, 0., 150.);
+//  h_Pampltdc = new TProfile("h_Pampltdc","Max Amplitude vs TDC offset", 25,0.,1.);
+  //fay  h_Presidual = new TProfile("h_Presidual","Pulse Residual", 250,0.,250.);
+
+  nEntriesStandard_.resize(kEBChannels*kGains, 0);
+  pedestalStandard_.resize(kEBChannels*kGains, 0.);
+  pedestal2Standard_.resize(kEBChannels*kGains, 0.);
+
+  avgSamples_.resize(kEBChannels*kGains, 0.);
+  avgSample2_.resize(kEBChannels*kGains, 0.);
+  nEntriesAvg_.resize(kEBChannels*kGains, 0);
+  pedavg_.resize(kEBChannels*kGains, 0.);
+  pedavg2_.resize(kEBChannels*kGains, 0.);
+
+  PedestalRead_.resize(kEBChannels*kGains, 0.);
+
+  nEntriesHit_.resize(kEBChannels*kGains, 0);
+  pedestalHit_.resize(kEBChannels*kGains, 0.);
+  pedestal2Hit_.resize(kEBChannels*kGains, 0.);
+
+  nEntriesMinMax_.resize(kEBChannels*kGains, 0);
+  pedestalMinMax_.resize(kEBChannels*kGains, 0.);
+  pedestal2MinMax_.resize(kEBChannels*kGains, 0.);
+
+  nEntriesSingle_.resize(kEBChannels*kGains, 0);
+  pedestalSingle_.resize(kEBChannels*kGains, 0.);
+  pedestal2Single_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_5_.resize(kEBChannels*kGains, 0.);
+  pedestal2_5_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_3p5_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3p5_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_2p1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_2p1_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_3p1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3p1_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_3g1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3g1_.resize(kEBChannels*kGains, 0.);
+  pedestal_3g2_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3g2_.resize(kEBChannels*kGains, 0.);
+  pedestal_3g3_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3g3_.resize(kEBChannels*kGains, 0.);
+  pedestal_3g4_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3g4_.resize(kEBChannels*kGains, 0.);
+  pedestal_3g5_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3g5_.resize(kEBChannels*kGains, 0.);
+  pedestal_3g6_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3g6_.resize(kEBChannels*kGains, 0.);
+  pedestal_3g7_.resize(kEBChannels*kGains, 0.);
+  pedestal2_3g7_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_4p1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_4p1_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_5p1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_5p1_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_6p1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_6p1_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_7p1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_7p1_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_8p1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_8p1_.resize(kEBChannels*kGains, 0.);
+
+  pedestal_9p1_.resize(kEBChannels*kGains, 0.);
+  pedestal2_9p1_.resize(kEBChannels*kGains, 0.);
+
+  // Sinusoidal pattern noise
+  if(patternNoise_) {
+    entriesSin.resize(kEBChannels*kGains, 0);
+    entriesLarge.resize(kEBChannels*kGains, 0);
+    phaseMean.resize(kEBChannels*kGains, 0.);
+    freqMean.resize(kEBChannels*kGains, 0.);
+    freqMean2.resize(kEBChannels*kGains, 0.);
+    ampMean.resize(kEBChannels*kGains, 0.);
+  }
+
+  // endcaps
+  nEntriesStandardEE_.resize(kEEChannels*kGains, 0);
+  pedestalStandardEE_.resize(kEEChannels*kGains, 0.);
+  pedestal2StandardEE_.resize(kEEChannels*kGains, 0.);
+
+  avgSamplesEE_.resize(kEEChannels*kGains, 0.);
+  avgSample2EE_.resize(kEEChannels*kGains, 0.);
+  nEntriesAvgEE_.resize(kEEChannels*kGains, 0);
+  pedavgEE_.resize(kEEChannels*kGains, 0.);
+  pedavg2EE_.resize(kEEChannels*kGains, 0.);
+
+  PedestalReadEE_.resize(kEEChannels*kGains, 0.);
+
+  nEntriesHitEE_.resize(kEEChannels*kGains, 0);
+  pedestalHitEE_.resize(kEEChannels*kGains, 0.);
+  pedestal2HitEE_.resize(kEEChannels*kGains, 0.);
+
+  //  h_Shape_ = new TH2F("h_Shape_","Xtal in Beam Shape",250,0,10,350,0,3500);
+  //  h_Shape_Central = new TH2F("h_Shape_Central","Xtal in Beam Shape",250,0,10,350,0,3500);
+  //  h_PShape_Central = new TProfile("h_PShape_Central","Xtal in Beam Shape",250,0,10," ");
+//  h_tdc    = new TH1F("h_tdc","TDC",2000,0,2000);
+//  h_tdcr   = new TH1F("h_tdcr","TDC",3000,-1,2);
+
+  hEntries = new TProfile("Entries","entries per SM", 36,1. ,37);
+  // Reconstructed energies
+  hPed248 = new TH1F("Ped248","Pedestal Channel 248", 100,175 ,225);
+  // hPed248Evt = new TH1F("Ped248Evt","Pedestal Channel 248 vs event", 20000,0 ,20000);
+  hPed248LF = new TH1F("Ped248LF","Pedestal LF Channel 248", 100,175 ,225);
+  hPed248HF = new TH1F("Ped248HF","Pedestal HF Channel 248", 100,-25 ,25);
+  hPed248Weights = new TH1F("Ped248Weights","Pedestal Weights Channel 248", 100,-25 ,25);
+  hPed248Max = new TH1F("Ped248Max","Pedestal Max Channel 248", 100,175 ,225);
+  //  hPed248LFEvt = new TH1F("Ped248LFEvt","Pedestal LF Channel 248 vs event", 2000,0 ,2000);
+  hPed248_3p1 = new TH1F("Ped248_3p1","Pedestal Channel 248 3+1", 60,-10.0 ,10.0);
+  //  hPed248_3p1Evt = new TH1F("Ped248_3p1Evt","Pedestal Channel 248 3+1 vs sample", 2000,0 ,2000);
+  hPed248corr = new TH2F("Ped248corr","Pedestal Channel 248 3+1 vs LF", 40,184 ,194, 60,-10.0 ,10.0);
+  hPed248sample = new TProfile("Ped248sample","Pedestal Channel 248 samples", 10,0 ,10);
+  hPed248sampleZS = new TProfile("Ped248sampleZS","Pedestal Channel 248 samples ZS", 10,0 ,10);
+  hPed45784 = new TH1F("Ped45784","Pedestal Channel 45784", 100,175 ,225);
+  //  hPed45784Evt = new TH1F("Ped45784Evt","Pedestal Channel 45784 vs event", 20000,0 ,20000);
+  hPed45784LF = new TH1F("Ped45784LF","Pedestal LF Channel 45784", 100,175 ,225);
+  hPed45784HF = new TH1F("Ped45784HF","Pedestal HF Channel 45784", 100,-25 ,25);
+  hPed45784Weights = new TH1F("Ped45784Weights","Pedestal Weights Channel 45784", 100,-25 ,25);
+  hPed45784Max = new TH1F("Ped45784Max","Pedestal Max Channel 45784", 100,175 ,225);
+  //  hPed45784LFEvt = new TH1F("Ped45784LFEvt","Pedestal LF Channel 45784 vs event", 2000,0 ,2000);
+  hPed45784sample = new TProfile("Ped45784sample","Pedestal Channel 45784 samples", 10,0 ,10);
+  hPed45784sampleZS = new TProfile("Ped45784sampleZS","Pedestal Channel 45784 samples ZS", 10,0 ,10);
+  hPed46845sample = new TProfile("Ped46845sample","Pedestal Channel 46845 samples", 10,0 ,10);
+  hPed46845sampleZS = new TProfile("Ped46845sampleZS","Pedestal Channel 46845 samples ZS", 10,0 ,10);
+  hPedsample = new TProfile("Pedsample","Pedestal samples", 10,0 ,10,-10,10);
+
+  for (int gainId = 0; gainId < kGains; gainId++) {
+    hEBEntry[gainId] = new TH2F(Form("EBEntry_%i",gainId),
+				Form("Digits gain %i",gainValues[gainId]),360,1.,361.,171,-85.,86.);
+    hMaxMin[gainId] = new TH1F(Form("MaxMin_%i",gainId),
+			       Form("max - min gain %i",gainValues[gainId]),100, 0., 100.);
+    hEvent[gainId] = new TH1F(Form("Event_%i",gainId),
+			       Form("Pattern Noise per event gain %i",gainValues[gainId]),100, 0., 100.);
+    if(patternNoise_) {
+      hSinusAmp[gainId] = new TH2F(Form("EBSinusAmp_%i",gainId),
+				   Form("Sinus Fluctuation gain %i",gainValues[gainId]),360,1.,361.,171,-85.,86.);
+      hLargeAmp[gainId] = new TH2F(Form("EBLargeAmp_%i",gainId),
+				   Form("Large Amp Fluctuation gain %i",gainValues[gainId]),360,1.,361.,171,-85.,86.);
+      hFreqMhz[gainId] = new TH1F(Form("FreqMHz_%i",gainId),
+				  Form("frequency (Mhz) gain %i",gainValues[gainId]),100, 8., 13.);
+      hPhase[gainId] = new TH1F(Form("Phase_%i",gainId),Form("phase gain %i",gainValues[gainId]),70, 0., 7.0);
+      hAmp[gainId] = new TH1F(Form("Amp_%i",gainId),Form("amplitude gain %i",gainValues[gainId]),100, 0., 50.);
+      hChi2[gainId] = new TH1F(Form("Chi2_%i",gainId),Form("Chi2 gain %i",gainValues[gainId]),50, 0., 1.0);
+      hChi2FF[gainId] = new TH1F(Form("Chi2FF_%i",gainId),Form("Fixed frequency Chi2 gain %i",gainValues[gainId]),50, 0., 1.0);
+    }
+  }
+  // Create output text file for large fluctuation events
+  if(ECALType_ == "EB" || ECALType_ == "EA")    // barrel
+    fLargeAmp.open(Form("run_%d.outZS",runnumber_));
+
+  for(int i = 0; i < 10; i++)
+    nevent[i] = 0;
+  if(readPedestals_) {
+    // Read input text file for standard pedestals
+    std::ifstream fPedestal;
+    fPedestal.open(Form("pedestal_%d",runnumber_));
+    for (int iChannel = 0; iChannel < kEBChannels; iChannel++) {
+      int Xtal;
+      double xmean[3] = {0,0,0};
+      double sig[3] = {0,0,0};
+      double sighf[3] = {0,0,0}; 
+      double siglf[3] = {0,0,0};
+      fPedestal >> Xtal 
+		>> xmean[0] >> sig[0] >> sighf[0] >> siglf[0]
+		>> xmean[1] >> sig[1] >> sighf[1] >> siglf[1]
+		>> xmean[2] >> sig[2] >> sighf[2] >> siglf[2] ;
+      if(Xtal != iChannel) {
+	cout << "pb read pedestal file : EB iChannel " << iChannel
+		  << " Xtal " << Xtal << endl;
+      }
+      for (int gainId = 0; gainId < kGains; gainId++) {
+	int arrayId = gainId*kEBChannels + iChannel;
+	PedestalRead_[arrayId] = xmean[gainId];
+      }
+    }
+    for (int iChannel = 0; iChannel < kEEChannels; iChannel++) {
+      int Xtal;
+      double xmean[3] = {0,0,0};
+      double sig[3] = {0,0,0};
+      double sighf[3] = {0,0,0}; 
+      double siglf[3] = {0,0,0};
+      fPedestal >> Xtal 
+		>> xmean[0] >> sig[0] >> sighf[0] >> siglf[0]
+		>> xmean[1] >> sig[1] >> sighf[1] >> siglf[1]
+		>> xmean[2] >> sig[2] >> sighf[2] >> siglf[2] ;
+      if(Xtal != iChannel) {
+	cout << "pb read pedestal file : iChannel " << iChannel
+		  << " Xtal " << Xtal << endl;
+      }
+      for (int gainId = 0; gainId < kGains; gainId++) {
+	int arrayId = gainId*kEEChannels + iChannel;
+	PedestalReadEE_[arrayId] = xmean[gainId];
+      }
+    }
+    fPedestal.close();
+  }  // readPedestals_
+  else{
+    for (int gainId = 0; gainId < kGains; gainId++) {
+      for (int iChannel = 0; iChannel < kEBChannels; iChannel++) {
+	int arrayId = gainId*kEBChannels + iChannel;
+	PedestalRead_[arrayId] = 0.;
+      }
+      for (int iChannel = 0; iChannel < kEEChannels; iChannel++) {
+	int arrayId = gainId*kEEChannels + iChannel;
+	PedestalReadEE_[arrayId] = 0.;
+      }
+    }
+  }  // !readPedestals_
+  vCovMatEB = new vector<H4CovMat*>(kEBChannels);
+  for (unsigned int i = 0; i < vCovMatEB->size(); i++) {
+    (*vCovMatEB)[i] = new H4CovMat();
+    (*vCovMatEB)[i]->init(runnumber_);
+    (*vCovMatEB)[i]->SetMode(true);
+  }
+  vCovMatEE = new vector<H4CovMat*>(kEEChannels);
+  for (unsigned int i = 0; i < vCovMatEE->size(); i++) {
+    (*vCovMatEE)[i] = new H4CovMat();
+    (*vCovMatEE)[i]->init(runnumber_);
+    (*vCovMatEE)[i]->SetMode(true);
+  }
+
+  cout << "Exiting beginJob" << endl;
+}//beginJob
+
+//========================================================================
+void
+EcalPedestal::endJob() {
+//========================================================================
+
+  cout << "Entering endJob" << endl;
+  // Read input text file for standard pedestals
+  /*  do not use intercalibration
+  double IntercalibCoeff[500];
+  for(int i=0;i<500;i++)IntercalibCoeff[i]=1;
+  std::ifstream fInterCalib;
+  fInterCalib.open("H42007EE_CalibrationS1_V02.txt");
+  int Xind=-1;
+  int Yind=-1;
+  float Coeff=-1;
+  int  status=-1;
+  int statistics=-1;
+  float sigmaOe=-1;
+  for (int iChannel = 0; iChannel < kEEChannels; iChannel++) {
+    fInterCalib >> Xind >> Yind >> Coeff >> sigmaOe >> statistics >> status;
+    if(status>0){
+      int ic = 20 * (Yind - 51) + 35 - Xind;
+      if(ic != iChannel)
+	cout << "pb read intecalibration file : Channel " << iChannel
+	     << " ic " << ic << endl;
+      IntercalibCoeff[ic]=Coeff;
+    }
+  }
+  fInterCalib.close();
+  */
+  fLargeAmp.close();
+
+  TFile f(Form("ecalPedestal_%d.root",runnumber_),"RECREATE");
+  float noiseup[kGains] = {5., 2., 1.};
+  float noisegup[kGains] = {10., 4., 2.};
+  float noisecut[kGains] = {1.5, 1.0, 0.7};
+  float noisecutEE[kGains] = {2.5, 1.5, 1.0};
+  float hitup[kGains] = {5., 5., 10.};
+  float sum25up[kGains] = {15., 10., 5.};
+  float sum9up[kGains] = {10., 5., 2.5};
+
+// Amplitude vs TDC offset
+//  h_ampltdc->Write(); 
+//  h_Pampltdc->Write(); 
+ 
+  //profiles
+  //  h_Shape_->Write();
+  //  h_Shape_Central->Write();
+  //  h_PShape_Central->Write();
+//  h_tdc->Write(); 
+//  h_tdcr->Write(); 
+
+  cout << " Nb EB events         " << nevent[0] << endl
+       << " Nb EB events gain 12 " << nevent[1] << endl
+       << " Nb EB events gain 6  " << nevent[2] << endl
+       << " Nb EB events gain 1  " << nevent[3] << endl
+       << " Nb EE events         " << nevent[5] << endl
+       << " Nb EE events gain 12 " << nevent[6] << endl
+       << " Nb EE events gain 6  " << nevent[7] << endl
+       << " Nb EE events gain 1  " << nevent[8] << endl;
+
+  // Create output text file for standard pedestals
+  std::ofstream fPedestal;
+  if(!readPedestals_)
+    fPedestal.open(Form("pedestal_%d",runnumber_));
+  else
+    fPedestal.open(Form("pedestal_new_%d",runnumber_));
+  std::ofstream fDQM;
+  fDQM.open(Form("DQMlike_%d",runnumber_));
+
+  if(nevent[0] > 0) {  // barrel data present
+    hEntries->Write();
+    hPedsample->Write();
+    hPed248->Write();
+    //  hPed248Evt->Write();
+    hPed248LF->Write();
+    hPed248HF->Write();
+    hPed248Weights->Write();
+    hPed248Max->Write();
+    //  hPed248LFEvt->Write();
+    hPed248_3p1->Write();
+    //  hPed248_3p1Evt->Write();
+    hPed248corr->Write();
+    hPed248sample->Write();
+    hPed248sampleZS->Write();
+    hPed45784->Write();
+    //  hPed45784Evt->Write();
+    hPed45784LF->Write();
+    hPed45784HF->Write();
+    hPed45784Weights->Write();
+    hPed45784Max->Write();
+    //  hPed45784LFEvt->Write();
+    hPed45784sample->Write();
+    hPed45784sampleZS->Write();
+    hPed46845sample->Write();
+    hPed46845sampleZS->Write();
+
+    TH2F** hEBPed = new TH2F*[kGains];
+    TH2F** hEBNoise = new TH2F*[kGains];
+    TH2F** hEBNoiseLF = new TH2F*[kGains];
+    TH2F** hEBNoiseHF = new TH2F*[kGains];
+
+    TH2F** hEBNoiseHit = new TH2F*[kGains];
+    TH2F** hEBNoiseMinMax = new TH2F*[kGains];
+
+    TH2F** hEBNoise3p5 = new TH2F*[kGains];
+    if(patternNoise_) {
+      // Sinusoidal pattern noise
+      TH2F** hPatternNoise = new TH2F*[kGains];
+      TH2F** hPatternNoisePhase = new TH2F*[kGains];
+      TH2F** hPatternNoiseFreq = new TH2F*[kGains];
+      TH2F** hPatternNoiseAmp = new TH2F*[kGains];
+      for (int gainId = 0; gainId < kGains; gainId++) {
+	hPatternNoise[gainId] = new TH2F(Form("EBPatternNoise_%i",gainId),
+					 Form("Pattern Noise Events gain %i",gainValues[gainId]),360,1.,361.,171,-85.,86.);
+	hPatternNoisePhase[gainId] = new TH2F(Form("EBPatternNoisePhase_%i",gainId),
+					      Form("Pattern Noise Phase gain %i",gainValues[gainId]),360,1.,361.,171,-85.,86.);
+	hPatternNoiseFreq[gainId] = new TH2F(Form("EBPatternNoiseFreq_%i",gainId),
+					     Form("Pattern Noise Frequency gain %i",gainValues[gainId]),360,1.,361.,171,-85.,86.);
+	hPatternNoiseAmp[gainId] = new TH2F(Form("EBPatternNoiseAmp_%i",gainId),
+					    Form("Pattern Noise Amplitude gain %i",gainValues[gainId]),360,1.,361.,171,-85.,86.);
+	int NCh = 0;
+	for (int iChannel = 0; iChannel < kEBChannels; iChannel++) {
+	  int arrayId = gainId*kEBChannels + iChannel;
+	  if(entriesLarge[arrayId] > 0) {
+	    EBDetId myEBDetId = EBDetId::unhashIndex(iChannel);
+	    int ieta = myEBDetId.ieta();  // -85:-1,1:85
+	    int iphi = myEBDetId.iphi();  // 1:360
+	    Double_t myent = entriesSin[arrayId];
+	    if(myent > 0) {
+	      hPatternNoise[gainId]->Fill(iphi, ieta, myent);
+	      phaseMean[arrayId] /= myent;
+	      hPatternNoisePhase[gainId]->Fill(iphi, ieta, phaseMean[arrayId]);
+	      freqMean[arrayId] /= myent;
+	      freqMean2[arrayId] /= myent;
+	      Double_t RMS = sqrt(freqMean2[arrayId] - freqMean[arrayId] * freqMean[arrayId]);
+	      hPatternNoiseFreq[gainId]->Fill(iphi, ieta, freqMean[arrayId]);
+	      ampMean[arrayId] /= myent;
+	      hPatternNoiseAmp[gainId]->Fill(iphi, ieta, ampMean[arrayId]);
+	      cout << NCh << " channel " << iChannel << " gain " << gainValues[gainId]
+		   << " eta " << ieta << " phi " << iphi
+		   << " entries " << myent << " phase " << phaseMean[arrayId] << " amp " << ampMean[arrayId]
+		   << " freq " << freqMean[arrayId] << " RMS " << RMS << endl;
+	      NCh ++;
+	    }
+	    else
+	      cout << " Non sinus large noise, channel " << iChannel << " gain " << gainValues[gainId]
+		   << " eta " << ieta << " phi " << iphi
+		   << " entries " << entriesLarge[arrayId] << endl;
+	  }
+	}   // loop on channels
+	cout << " gain " << gainValues[gainId] << " Nb Channels with Sinusoidal noise : " << NCh << endl;
+
+	if(hChi2[gainId]->GetEntries() > 0.) { // save only when filled!
+	  hSinusAmp[gainId]->Write();
+	  hLargeAmp[gainId]->Write();
+	  hMaxMin[gainId]->Write();
+	  hEvent[gainId]->Write();
+	  hFreqMhz[gainId]->Write();
+	  hPhase[gainId]->Write();
+	  hAmp[gainId]->Write();
+	  hChi2[gainId]->Write();
+	  hChi2FF[gainId]->Write();
+
+	  hPatternNoise[gainId]->Write();
+	  hPatternNoisePhase[gainId]->Write();
+	  hPatternNoiseFreq[gainId]->Write();
+	  hPatternNoiseAmp[gainId]->Write();
+	}
+      }
+    }  // patternNoise analysis
+
+    for (int gainId = 0; gainId < kGains; gainId++) {
+      if(hEBEntry[gainId]->GetEntries() > 0.) hEBEntry[gainId]->Write();
+      hEBPed[gainId] = new TH2F(Form("EBPed_%d", gainId),
+				Form("pedestal gain %i", gainValues[gainId]),360,1.,361.,171,-85.,86.);
+      hEBNoise[gainId] = new TH2F(Form("EBNoise_%d", gainId),
+				  Form("Total noise gain %i", gainValues[gainId]),360,1.,361.,171,-85.,86.);
+      hEBNoiseLF[gainId] = new TH2F(Form("EBNoiseLF_%d", gainId),
+				    Form("Low frequency noise gain %i", gainValues[gainId]),360,1.,361.,171,-85.,86.);
+      hEBNoiseHF[gainId] = new TH2F(Form("EBNoiseHF_%d", gainId),
+				    Form("High frequency noise gain %i", gainValues[gainId]),360,1.,361.,171,-85.,86.);
+
+      hEBNoiseHit[gainId] = new TH2F(Form("EBNoiseHit_%d", gainId),
+				     Form("Weights Hit noise gain %i", gainValues[gainId]),360,1.,361.,171,-85.,86.);
+      hEBNoiseMinMax[gainId] = new TH2F(Form("EBNoiseMax_%d", gainId),
+					Form("Min MaxHit noise gain %i", gainValues[gainId]),360,1.,361.,171,-85.,86.);
+
+      hEBNoise3p5[gainId] = new TH2F(Form("EBNoise3p5_%d", gainId),
+				     Form("3+5 weights noise gain %i", gainValues[gainId]),360,1.,361.,171,-85.,86.);
+    }   // loop on gains
+
+    //  TH1F*** hEntries = new TH1F**[36];
+    TH2F*** hTotalNoiseVsPos = new TH2F**[36];
+    //  TH1F*** hPedestal = new TH1F**[36];
+    //  TH1F*** hTotNoise = new TH1F**[36];
+    //  TH1F*** hLFNoise = new TH1F**[36];
+    //  TH1F*** hHFNoise = new TH1F**[36];
+    TH1F** hPedestal = new TH1F*[kGains];
+    TH1F** hTotNoise = new TH1F*[kGains];
+    TH1F** hLFNoise  = new TH1F*[kGains];
+    TH1F** hHFNoise  = new TH1F*[kGains];
+
+    TH1F** hPedestalHit = new TH1F*[kGains];
+    TH1F** hTotNoiseHit = new TH1F*[kGains];
+
+    TH1F** hPedestalMinMax = new TH1F*[kGains];
+    TH1F** hTotNoiseMinMax = new TH1F*[kGains];
+
+    for (int gainId = 0; gainId < kGains; gainId++) {
+      //    std::string hTitle = Form("Number entries gain x%d", gainValues[gainId]);
+      //    hEntries[gainId] = new TH1F(Form("Entries_SM%d_%d", SM + 1, gainId),
+      //				    hTitle.c_str(), 1700, 1., 1701.);
+      std::string hTitle = Form("Pedestal gain x%d", gainValues[gainId]);
+      hPedestal[gainId] = new TH1F(Form("Pedestal_%d", gainId),
+				   hTitle.c_str(), 100, 150., 250.);
+      hTitle = Form("Tot Noise gain x%d", gainValues[gainId]);
+      hTotNoise[gainId] = new TH1F(Form("TotNoise_%d", gainId),
+				   hTitle.c_str(), 100, 0., noiseup[gainId]);
+      hTitle = Form("LF noise gain x%d", gainValues[gainId]);
+      hLFNoise[gainId] = new TH1F(Form("LFNoise_%d",  gainId),
+				  hTitle.c_str(), 100, 0., noiseup[gainId]);
+      hTitle = Form("HF noise gain x%d", gainValues[gainId]);
+      hHFNoise[gainId] = new TH1F(Form("HFNoise_%d", gainId),
+				  hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Pedestal for weights hits gain x%d", gainValues[gainId]);
+      hPedestalHit[gainId] = new TH1F(Form("PedestalHit_%d", gainId),
+				      hTitle.c_str(),  100, -2., 2.);
+      hTitle = Form("Tot Noise forweights hits gain x%d", gainValues[gainId]);
+      hTotNoiseHit[gainId] = new TH1F(Form("TotNoiseHit_%d", gainId),
+				      hTitle.c_str(), 100, 0., hitup[gainId]);
+      hTitle = Form("Pedestal for Min Max hits gain x%d", gainValues[gainId]);
+      hPedestalMinMax[gainId] = new TH1F(Form("PedestalMinMax_%d", gainId),
+					 hTitle.c_str(),  100, -10., 10.);
+      hTitle = Form("Tot Noise for  Min Max hits gain x%d", gainValues[gainId]);
+      hTotNoiseMinMax[gainId] = new TH1F(Form("TotNoiseMinMax_%d", gainId),
+					 hTitle.c_str(), 100, 0., 10.);
+    }  // loop on gain
+
+  /*
+    TH1F*** hPedestalSM = new TH1F**[36];
+    TH1F*** hTotNoiseSM = new TH1F**[36];
+    TH1F*** hLFNoiseSM = new TH1F**[36];
+    TH1F*** hHFNoiseSM = new TH1F**[36];
+
+    TH2F*** hPedestalVsPos = new TH2F**[36];
+
+    TH1F*** hNoise_25 = new TH1F**[36];
+    TH1F*** hNoise_9 = new TH1F**[36];
+    TH2F*** hNoise_25VsPos = new TH2F**[36];
+    TH2F*** hNoise_9VsPos = new TH2F**[36];
+
+    TH2F*** hNoise_25XtVsPos = new TH2F**[36];
+    TH2F*** hNoise_9XtVsPos = new TH2F**[36];
+    TH2F*** hTotCorr25VsPos = new TH2F**[36];
+    TH2F*** hTotCorr9VsPos = new TH2F**[36];
+
+  TH1F*** hNoise_25Xt = new TH1F**[36];
+  TH1F*** hNoise_9Xt = new TH1F**[36];
+  TH1F*** hTotCorr25 = new TH1F**[36];
+  TH1F*** hTotCorr9 = new TH1F**[36];
+  TH1F*** hTotCorrp25 = new TH1F**[36];
+  TH1F*** hTotCorrp9 = new TH1F**[36];
+
+  TH1F*** hPedestalSingle = new TH1F**[36];
+  TH1F*** hTotNoiseSingle = new TH1F**[36];
+  TH1F*** hNoiseSingle_9 = new TH1F**[36];
+  TH1F*** hNoiseSingle_25 = new TH1F**[36];
+
+  TH1F*** hPedestal_5 = new TH1F**[36];
+  TH1F*** hTotNoise_5 = new TH1F**[36];
+  TH1F*** hNoise_5_9 = new TH1F**[36];
+  TH1F*** hNoise_5_25 = new TH1F**[36];
+
+  TH1F*** hPedestal_3p5 = new TH1F**[36];
+  TH1F*** hNoise_3p5_9 = new TH1F**[36];
+  TH1F*** hNoise_3p5_25 = new TH1F**[36];
+  TH1F*** hTotNoise_3p5 = new TH1F**[36];
+  TH2F*** hNoise_3p5vsTot = new TH2F**[36];
+
+  TH1F*** hPedestal_2p1 = new TH1F**[36];
+  TH1F*** hTotNoise_2p1 = new TH1F**[36];
+  TH1F*** hNoise_2p1_9 = new TH1F**[36];
+  TH1F*** hNoise_2p1_25 = new TH1F**[36];
+ 
+  TH1F*** hPedestal_3p1 = new TH1F**[36];
+  TH1F*** hTotNoise_3p1 = new TH1F**[36];
+  TH1F*** hNoise_3p1_9 = new TH1F**[36];
+  TH1F*** hNoise_3p1_25 = new TH1F**[36];
+
+  TH1F*** hPedestal_3g1 = new TH1F**[36];
+  TH1F*** hTotNoise_3g1 = new TH1F**[36];
+  TH1F*** hPedestal_3g2 = new TH1F**[36];
+  TH1F*** hTotNoise_3g2 = new TH1F**[36];
+  TH1F*** hPedestal_3g3 = new TH1F**[36];
+  TH1F*** hTotNoise_3g3 = new TH1F**[36];
+  TH1F*** hPedestal_3g4 = new TH1F**[36];
+  TH1F*** hTotNoise_3g4 = new TH1F**[36];
+  TH1F*** hPedestal_3g5 = new TH1F**[36];
+  TH1F*** hTotNoise_3g5 = new TH1F**[36];
+  TH1F*** hPedestal_3g6 = new TH1F**[36];
+  TH1F*** hTotNoise_3g6 = new TH1F**[36];
+  TH1F*** hPedestal_3g7 = new TH1F**[36];
+  TH1F*** hTotNoise_3g7 = new TH1F**[36];
+
+
+  TH1F*** hPedestal_4p1 = new TH1F**[36];
+  TH1F*** hTotNoise_4p1 = new TH1F**[36];
+  TH1F*** hNoise_4p1_9 = new TH1F**[36];
+  TH1F*** hNoise_4p1_25 = new TH1F**[36];
+
+  TH1F*** hPedestal_5p1 = new TH1F**[36];
+  TH1F*** hTotNoise_5p1 = new TH1F**[36];
+  TH1F*** hNoise_5p1_9 = new TH1F**[36];
+  TH1F*** hNoise_5p1_25 = new TH1F**[36];
+
+  TH1F*** hPedestal_6p1 = new TH1F**[36];
+  TH1F*** hTotNoise_6p1 = new TH1F**[36];
+  TH1F*** hNoise_6p1_9 = new TH1F**[36];
+  TH1F*** hNoise_6p1_25 = new TH1F**[36];
+ 
+  TH1F*** hPedestal_7p1 = new TH1F**[36];
+  TH1F*** hTotNoise_7p1 = new TH1F**[36];
+  TH1F*** hNoise_7p1_9 = new TH1F**[36];
+  TH1F*** hNoise_7p1_25 = new TH1F**[36];
+
+  TH1F*** hPedestal_8p1 = new TH1F**[36];
+  TH1F*** hTotNoise_8p1 = new TH1F**[36];
+  TH1F*** hNoise_8p1_9 = new TH1F**[36];
+  TH1F*** hNoise_8p1_25 = new TH1F**[36];
+
+  TH1F*** hPedestal_9p1 = new TH1F**[36];
+  TH1F*** hNoise_9p1_9 = new TH1F**[36];
+  TH1F*** hNoise_9p1_25 = new TH1F**[36];
+  TH1F*** hTotNoise_9p1 = new TH1F**[36];
+
+  TH1F*** hEntriesHit = new TH1F**[36];
+  TH1F*** hPedestalHit = new TH1F**[36];
+  TH1F*** hTotNoiseHit = new TH1F**[36];
+  TH1F*** hPedestalSMHit = new TH1F**[36];
+  TH1F*** hTotNoiseSMHit = new TH1F**[36];
+  */
+
+    for(int SM = 0; SM <36; SM++) {
+    //    hEntries[SM] = new TH1F*[kGains];
+    //    hPedestal[SM] = new TH1F*[kGains];
+    //    hTotNoise[SM] = new TH1F*[kGains];
+    //    hLFNoise[SM] = new TH1F*[kGains];
+    //    hHFNoise[SM] = new TH1F*[kGains];
+
+    //    hPedestalSM[SM] = new TH1F*[kGains];
+    //    hTotNoiseSM[SM] = new TH1F*[kGains];
+    //    hLFNoiseSM[SM] = new TH1F*[kGains];
+    //    hHFNoiseSM[SM] = new TH1F*[kGains];
+
+    //    hPedestalVsPos[SM] = new TH2F*[kGains];
+      hTotalNoiseVsPos[SM] = new TH2F*[kGains];
+    }
+    TH1F** hNoise_25 = new TH1F*[kGains];
+    TH1F** hNoise_9 = new TH1F*[kGains];
+  //  TH1F** hNoise_25VsPos = new TH2F*[kGains];
+  //  TH1F** hNoise_9VsPos = new TH2F*[kGains];
+
+  //  TH1F** hNoise_25XtVsPos = new TH2F*[kGains];
+  //  TH1F** hNoise_9XtVsPos = new TH2F*[kGains];
+  //  TH1F** hTotCorr25VsPos = new TH2F*[kGains];
+  //  TH1F** hTotCorr9VsPos = new TH2F*[kGains];
+
+    TH1F** hNoise_25Xt = new TH1F*[kGains];
+    TH1F** hNoise_9Xt = new TH1F*[kGains];
+    TH1F** hTotCorr25 = new TH1F*[kGains];
+    TH1F** hTotCorr9 = new TH1F*[kGains];
+    TH1F** hTotCorrp25 = new TH1F*[kGains];
+    TH1F** hTotCorrp9 = new TH1F*[kGains];
+
+    TH1F** hPedestalSingle = new TH1F*[kGains];
+    TH1F** hTotNoiseSingle = new TH1F*[kGains];
+    TH1F** hNoiseSingle_9 = new TH1F*[kGains];
+    TH1F** hNoiseSingle_25 = new TH1F*[kGains];
+
+    TH1F** hPedestal_5 = new TH1F*[kGains];
+    TH1F** hTotNoise_5 = new TH1F*[kGains];
+    TH1F** hNoise_5_9 = new TH1F*[kGains];
+    TH1F** hNoise_5_25 = new TH1F*[kGains];
+
+    TH1F** hPedestal_3p5 = new TH1F*[kGains];
+    TH1F** hNoise_3p5_9 = new TH1F*[kGains];
+    TH1F** hNoise_3p5_25 = new TH1F*[kGains];
+    TH1F** hTotNoise_3p5 = new TH1F*[kGains];
+    TH2F** hNoise_3p5vsTot = new TH2F*[kGains];
+
+    TH1F** hPedestal_2p1 = new TH1F*[kGains];
+    TH1F** hTotNoise_2p1 = new TH1F*[kGains];
+    TH1F** hNoise_2p1_9 = new TH1F*[kGains];
+    TH1F** hNoise_2p1_25 = new TH1F*[kGains];
+ 
+    TH1F** hPedestal_3p1 = new TH1F*[kGains];
+    TH1F** hTotNoise_3p1 = new TH1F*[kGains];
+    TH1F** hNoise_3p1_9 = new TH1F*[kGains];
+    TH1F** hNoise_3p1_25 = new TH1F*[kGains];
+
+    TH1F** hPedestal_3g1 = new TH1F*[kGains];
+    TH1F** hTotNoise_3g1 = new TH1F*[kGains];
+    TH1F** hPedestal_3g2 = new TH1F*[kGains];
+    TH1F** hTotNoise_3g2 = new TH1F*[kGains];
+    TH1F** hPedestal_3g3 = new TH1F*[kGains];
+    TH1F** hTotNoise_3g3 = new TH1F*[kGains];
+    TH1F** hPedestal_3g4 = new TH1F*[kGains];
+    TH1F** hTotNoise_3g4 = new TH1F*[kGains];
+    TH1F** hPedestal_3g5 = new TH1F*[kGains];
+    TH1F** hTotNoise_3g5 = new TH1F*[kGains];
+    TH1F** hPedestal_3g6 = new TH1F*[kGains];
+    TH1F** hTotNoise_3g6 = new TH1F*[kGains];
+    TH1F** hPedestal_3g7 = new TH1F*[kGains];
+    TH1F** hTotNoise_3g7 = new TH1F*[kGains];
+
+
+    TH1F** hPedestal_4p1 = new TH1F*[kGains];
+    TH1F** hTotNoise_4p1 = new TH1F*[kGains];
+    TH1F** hNoise_4p1_9 = new TH1F*[kGains];
+    TH1F** hNoise_4p1_25 = new TH1F*[kGains];
+
+    TH1F** hPedestal_5p1 = new TH1F*[kGains];
+    TH1F** hTotNoise_5p1 = new TH1F*[kGains];
+    TH1F** hNoise_5p1_9 = new TH1F*[kGains];
+    TH1F** hNoise_5p1_25 = new TH1F*[kGains];
+
+    TH1F** hPedestal_6p1 = new TH1F*[kGains];
+    TH1F** hTotNoise_6p1 = new TH1F*[kGains];
+    TH1F** hNoise_6p1_9 = new TH1F*[kGains];
+    TH1F** hNoise_6p1_25 = new TH1F*[kGains];
+ 
+    TH1F** hPedestal_7p1 = new TH1F*[kGains];
+    TH1F** hTotNoise_7p1 = new TH1F*[kGains];
+    TH1F** hNoise_7p1_9 = new TH1F*[kGains];
+    TH1F** hNoise_7p1_25 = new TH1F*[kGains];
+
+    TH1F** hPedestal_8p1 = new TH1F*[kGains];
+    TH1F** hTotNoise_8p1 = new TH1F*[kGains];
+    TH1F** hNoise_8p1_9 = new TH1F*[kGains];
+    TH1F** hNoise_8p1_25 = new TH1F*[kGains];
+
+    TH1F** hPedestal_9p1 = new TH1F*[kGains];
+    TH1F** hNoise_9p1_9 = new TH1F*[kGains];
+    TH1F** hNoise_9p1_25 = new TH1F*[kGains];
+    TH1F** hTotNoise_9p1 = new TH1F*[kGains];
+    /*
+    hEntriesHit[SM] = new TH1F*[kGains];
+    hPedestalHit[SM] = new TH1F*[kGains];
+    hTotNoiseHit[SM] = new TH1F*[kGains];
+    hPedestalSMHit[SM] = new TH1F*[kGains];
+    hTotNoiseSMHit[SM] = new TH1F*[kGains];
+    */
+    for (int gainId = 0; gainId < kGains; gainId++) {
+      for(int SM = 0; SM <36; SM++) {
+      /*
+      std::string hTitle = Form("Number entries gain x%d", gainValues[gainId]);
+      hEntries[SM][gainId] = new TH1F(Form("Entries_SM%d_%d", SM + 1, gainId),
+				      hTitle.c_str(), 1700, 1., 1701.);
+      hTitle = Form("Pedestal gain x%d", gainValues[gainId]);
+      hPedestal[SM][gainId] = new TH1F(Form("Pedestal_SM%d_%d", SM + 1, gainId),
+				       hTitle.c_str(), 100, 150., 250.);
+      hTitle = Form("Tot Noise gain x%d", gainValues[gainId]);
+      hTotNoise[SM][gainId] = new TH1F(Form("TotNoise_SM%d_%d", SM + 1, gainId),
+				       hTitle.c_str(), 100, 0., noiseup[gainId]);
+      hTitle = Form("LF noise gain x%d", gainValues[gainId]);
+      hLFNoise[SM][gainId] = new TH1F(Form("LFNoise_SM%d_%d", SM + 1, gainId),
+				      hTitle.c_str(), 100, 0., 2.);
+      hTitle = Form("HF noise gain x%d", gainValues[gainId]);
+      hHFNoise[SM][gainId] = new TH1F(Form("HFNoise_SM%d_%d", SM + 1, gainId),
+				      hTitle.c_str(), 100, 0., 2.);
+
+      hTitle = Form("Pedestal vs channel number, gain x%d", gainValues[gainId]);
+      hPedestalSM[SM][gainId] = new TH1F(Form("PedestalSM_SM%d_%d", SM + 1, gainId), 
+					 hTitle.c_str(), 1700, 1., 1701.);
+      hTitle = Form("Tot noise vs channel number, gain x%d", gainValues[gainId]);
+      hTotNoiseSM[SM][gainId] = new TH1F(Form("TotNoiseSM_SM%d_%d", SM + 1, gainId), 
+					 hTitle.c_str(), 1700, 1.,1701.);
+      hTitle = Form("LF noise vs channel number, gain x%d", gainValues[gainId]);
+      hLFNoiseSM[SM][gainId] = new TH1F(Form("LFNoiseSM_SM%d_%d", SM + 1, gainId), 
+					hTitle.c_str(), 1700, 1., 1701.);
+      hTitle = Form("HF noise vs channel number, gain x%d", gainValues[gainId]);
+      hHFNoiseSM[SM][gainId] = new TH1F(Form("HFNoiseSM_SM%d_%d", SM + 1, gainId), 
+					hTitle.c_str(), 1700, 1., 1701.);
+      */
+      //      hTitle = Form("Pedestal vs (#eta, #phi) gain x%d", gainValues[gainId]);
+      //      hPedestalVsPos[SM][gainId] = new TH2F(Form("PedestalVsPos_SM%d_%d", SM + 1, gainId),
+      //					    hTitle.c_str(),85, 0., 85, 20, 0., 20.);
+	string hTitle = Form("Noise vs (#eta, #phi) gain x%d", gainValues[gainId]);
+	hTotalNoiseVsPos[SM][gainId] = new TH2F(Form("TotalNoiseVsPos_SM%d_%d", SM + 1, gainId),
+						hTitle.c_str(), 85, 0., 85, 20, 0., 20.);
+      }  // end loop on SM
+      string hTitle = Form("Noise sum 25 Xtals, gain x%d", gainValues[gainId]);
+      hNoise_25[gainId] = new TH1F(Form("Noise_25_%d", gainId),  
+				   hTitle.c_str(), 500, 0., sum25up[gainId]);
+      hTitle = Form("Noise sum 9 Xtals, gain x%d", gainValues[gainId]);
+      hNoise_9[gainId] = new TH1F(Form("Noise_9_%d", gainId),  
+				  hTitle.c_str(), 500, 0., sum9up[gainId]);
+      //      hTitle = Form("Noise sum 25 xtals vs (#eta, #phi) gain x%d", 
+      //		    gainValues[gainId]);
+      //      hNoise_25VsPos[gainId] = new TH2F(Form("Noise_25VsPos_%d", gainId),
+      //					    hTitle.c_str(), 85, 0, 85, 20, 0, 20);
+      //      hTitle = Form("Noise sum 9 xtals vs (#eta, #phi) gain x%d", 
+      //		    gainValues[gainId]);
+      //      hNoise_9VsPos[gainId] = new TH2F(Form("Noise_9VsPos_%d", gainId),
+      //					   hTitle.c_str(), 85, 0, 85, 20, 0, 20);
+
+      hTitle = Form("Noise sum ind. 25 Xtals, gain x%d", gainValues[gainId]);
+      hNoise_25Xt[gainId] = new TH1F(Form("Noise_25Xt_%d", gainId),
+					 hTitle.c_str(), 500, 0., sum25up[gainId]);
+      hTitle = Form("Noise sum ind. 9 Xtals, gain x%d", gainValues[gainId]);
+      hNoise_9Xt[gainId] = new TH1F(Form("Noise_9Xt_%d", gainId),
+					hTitle.c_str(), 500, 0., sum9up[gainId]);
+      //      hTitle = Form("Noise sum ind. 25 Xtals vs (#eta, #phi) gain x%d",gainValues[gainId]);
+      //      hNoise_25XtVsPos[gainId] = new TH2F(Form("Noise_25XtVsPos_%d", gainId),
+      //					      hTitle.c_str(), 85, 0, 85, 20, 0, 20);
+      //      hTitle = Form("Noise sum ind. 9 Xtals vs (#eta, #phi) gain x%d",gainValues[gainId]);
+      //      hNoise_9XtVsPos[gainId] = new TH2F(Form("Noise_9XtVsPos_%d", gainId),
+      //					     hTitle.c_str(), 85, 0, 85, 20, 0, 20);
+      hTitle = Form("Corr. Noise 25 xtals, gain x%d", gainValues[gainId]);
+      hTotCorr25[gainId] = new TH1F(Form("TotCorr25_%d", gainId),
+					hTitle.c_str(), 500, 0., 2.);
+      hTitle = Form("Corr. Noise perc.25 xtals, gain x%d", gainValues[gainId]);
+      hTotCorrp25[gainId] = new TH1F(Form("TotCorrp25_%d", gainId),
+					 hTitle.c_str(), 250, 0., 1.);
+      hTitle = Form("Corr. Noise 9 xtals, gain x%d", gainValues[gainId]);
+      hTotCorr9[gainId] = new TH1F(Form("TotCorr9_%d", gainId),
+				       hTitle.c_str(), 500, 0., 2.);
+      hTitle = Form("Corr. Noise perc.9 xtals, gain x%d", gainValues[gainId]);
+      hTotCorrp9[gainId] = new TH1F(Form("TotCorrp9_%d", gainId),
+					hTitle.c_str(), 250, 0., 1.);
+
+      //      hTitle = Form("Corr. Noise 25 xtals vs (#eta, #phi) gain x%d",gainValues[gainId]);
+      //      hTotCorr25VsPos[gainId] = new TH2F(Form("TotCorr25VsPos_%d", gainId),
+      //					     hTitle.c_str(), 85, 0, 85, 20, 0, 20);
+      //      hTitle = Form("Corr. Noise 9 xtals vs (#eta, #phi) gain x%d",gainValues[gainId]);
+      //      hTotCorr9VsPos[gainId] = new TH2F(Form("TotCorr9VsPos_%d", gainId),
+      //					    hTitle.c_str(), 85, 0, 85, 20, 0, 20);
+
+      //    hTitle = Form("Noise9 gain x%d", gainValues[gainId]);
+      //    hNoise9[gainId] = new TH1F(Form("Noise9_SM%d_%d", SM + 1, gainId),
+      //				    hTitle.c_str(), 100, 0., 5.);
+      //    hTitle = Form("Noise25 gain x%d", gainValues[gainId]);
+      //    hNoise25[gainId] = new TH1F(Form("Noise25_SM%d_%d", SM + 1, gainId),
+      //				    hTitle.c_str(), 100, 0., 10.);
+
+      hTitle = Form("Noise Single 9 gain x%d", gainValues[gainId]);
+      hNoiseSingle_9[gainId] = new TH1F(Form("NoiseSingle_9_%d", gainId),
+					    hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise Single 25 gain x%d", gainValues[gainId]);
+      hNoiseSingle_25[gainId] = new TH1F(Form("NoiseSingle_25_%d", gainId),
+					     hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("PedestalSingle gain x%d", gainValues[gainId]);
+      hPedestalSingle[gainId] = new TH1F(Form("PedestalSingle_%d", gainId),
+					     hTitle.c_str(), 100, 150., 250.);
+      hTitle = Form("Tot Noise Single gain x%d", gainValues[gainId]);
+      hTotNoiseSingle[gainId] = new TH1F(Form("TotNoiseSingle_%d", gainId),
+					     hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Noise 5-weights 9 gain x%d", gainValues[gainId]);
+      hNoise_5_9[gainId] = new TH1F(Form("Noise_5_9_%d", gainId),
+					hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 5-weights 25 gain x%d", gainValues[gainId]);
+      hNoise_5_25[gainId] = new TH1F(Form("Noise_5_25_%d", gainId),
+					 hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 5-weights gain x%d", gainValues[gainId]);
+      hPedestal_5[gainId] = new TH1F(Form("Pedestal_5_%d", gainId),
+					 hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 5-weights gain x%d", gainValues[gainId]);
+      hTotNoise_5[gainId] = new TH1F(Form("TotNoise_5_%d", gainId),
+					 hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Noise 3+5 9 gain x%d", gainValues[gainId]);
+      hNoise_3p5_9[gainId] = new TH1F(Form("Noise_3p5_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 3+5 25 gain x%d", gainValues[gainId]);
+      hNoise_3p5_25[gainId] = new TH1F(Form("Noise_3p5_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal_3+5 gain x%d", gainValues[gainId]);
+      hPedestal_3p5[gainId] = new TH1F(Form("Pedestal_3p5_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3+5 gain x%d", gainValues[gainId]);
+      hTotNoise_3p5[gainId] = new TH1F(Form("TotNoise_3p5_%d", gainId),
+					   hTitle.c_str(), 100, 0., noiseup[gainId]);
+      hTitle = Form("Tot Noise 3+5 vs tot gain x%d", gainValues[gainId]);
+      if(gainId == 0)
+	hNoise_3p5vsTot[0] = new TH2F("Noise_3p5vsTot_0",
+					   hTitle.c_str(), 100, 1.8, 3.0, 100, 1.8, 3.0);
+      else if(gainId == 1)
+	hNoise_3p5vsTot[1] = new TH2F("Noise_3p5vsTot_1",
+					   hTitle.c_str(), 100, 1.0, 1.6,100, 1.0, 1.6);
+      else
+	hNoise_3p5vsTot[2] = new TH2F("Noise_3p5vsTot_2",
+					   hTitle.c_str(), 100, 0.4, 0.8, 100, 0.4, 0.8);
+
+      hTitle = Form("Noise 2+1 9 gain x%d", gainValues[gainId]);
+      hNoise_2p1_9[gainId] = new TH1F(Form("Noise_2p1_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 2+1 25 gain x%d", gainValues[gainId]);
+      hNoise_2p1_25[gainId] = new TH1F(Form("Noise_2p1_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 2+1 gain x%d", gainValues[gainId]);
+      hPedestal_2p1[gainId] = new TH1F(Form("Pedestal_2p1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 2+1 gain x%d", gainValues[gainId]);
+      hTotNoise_2p1[gainId] = new TH1F(Form("TotNoise_2p1_%d", gainId),
+					   hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Noise 3+1 9 gain x%d", gainValues[gainId]);
+      hNoise_3p1_9[gainId] = new TH1F(Form("Noise_3p1_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 3+1 25 gain x%d", gainValues[gainId]);
+      hNoise_3p1_25[gainId] = new TH1F(Form("Noise_3p1_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 3+1 gain x%d", gainValues[gainId]);
+      hPedestal_3p1[gainId] = new TH1F(Form("Pedestal_3p1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3+1 gain x%d", gainValues[gainId]);
+      hTotNoise_3p1[gainId] = new TH1F(Form("TotNoise_3p1_%d", gainId),
+					   hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Pedestal 3g1 gain x%d", gainValues[gainId]);
+      hPedestal_3g1[gainId] = new TH1F(Form("Pedestal_3g1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3g1 gain x%d", gainValues[gainId]);
+      hTotNoise_3g1[gainId] = new TH1F(Form("TotNoise_3g1_%d", gainId),
+					   hTitle.c_str(), 100, 0., noisegup[gainId]);
+      hTitle = Form("Pedestal 3g2 gain x%d", gainValues[gainId]);
+      hPedestal_3g2[gainId] = new TH1F(Form("Pedestal_3g2_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3g2 gain x%d", gainValues[gainId]);
+      hTotNoise_3g2[gainId] = new TH1F(Form("TotNoise_3g2_%d", gainId),
+					   hTitle.c_str(), 100, 0., noisegup[gainId]);
+      hTitle = Form("Pedestal 3g3 gain x%d", gainValues[gainId]);
+      hPedestal_3g3[gainId] = new TH1F(Form("Pedestal_3g3_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3g3 gain x%d", gainValues[gainId]);
+      hTotNoise_3g3[gainId] = new TH1F(Form("TotNoise_3g3_%d", gainId),
+					   hTitle.c_str(), 100, 0., noisegup[gainId]);
+      hTitle = Form("Pedestal 3g4 gain x%d", gainValues[gainId]);
+      hPedestal_3g4[gainId] = new TH1F(Form("Pedestal_3g4_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3g4 gain x%d", gainValues[gainId]);
+      hTotNoise_3g4[gainId] = new TH1F(Form("TotNoise_3g4_%d", gainId),
+					   hTitle.c_str(), 100, 0., noisegup[gainId]);
+      hTitle = Form("Pedestal 3g5 gain x%d", gainValues[gainId]);
+      hPedestal_3g5[gainId] = new TH1F(Form("Pedestal_3g5_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3g5 gain x%d", gainValues[gainId]);
+      hTotNoise_3g5[gainId] = new TH1F(Form("TotNoise_3g5_%d", gainId),
+					   hTitle.c_str(), 100, 0., noisegup[gainId]);
+      hTitle = Form("Pedestal 3g6 gain x%d", gainValues[gainId]);
+      hPedestal_3g6[gainId] = new TH1F(Form("Pedestal_3g6_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3g6 gain x%d", gainValues[gainId]);
+      hTotNoise_3g6[gainId] = new TH1F(Form("TotNoise_3g6_%d", gainId),
+					   hTitle.c_str(), 100, 0., noisegup[gainId]);
+      hTitle = Form("Pedestal 3g7 gain x%d", gainValues[gainId]);
+      hPedestal_3g7[gainId] = new TH1F(Form("Pedestal_3g7_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 3g7 gain x%d", gainValues[gainId]);
+      hTotNoise_3g7[gainId] = new TH1F(Form("TotNoise_3g7_%d", gainId),
+					   hTitle.c_str(), 100, 0., noisegup[gainId]);
+
+
+      hTitle = Form("Noise 4+1 9 gain x%d", gainValues[gainId]);
+      hNoise_4p1_9[gainId] = new TH1F(Form("Noise_4p1_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 4+1 25 gain x%d", gainValues[gainId]);
+      hNoise_4p1_25[gainId] = new TH1F(Form("Noise_4p1_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 4+1 gain x%d", gainValues[gainId]);
+      hPedestal_4p1[gainId] = new TH1F(Form("Pedestal_4p1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 4+1 gain x%d", gainValues[gainId]);
+      hTotNoise_4p1[gainId] = new TH1F(Form("TotNoise_4p1_%d", gainId),
+					   hTitle.c_str(), 100, 0., noiseup[gainId]);
+      
+      hTitle = Form("Noise 5+1 9 gain x%d", gainValues[gainId]);
+      hNoise_5p1_9[gainId] = new TH1F(Form("Noise_5p1_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 5+1 25 gain x%d", gainValues[gainId]);
+      hNoise_5p1_25[gainId] = new TH1F(Form("Noise_5p1_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 5+1 gain x%d", gainValues[gainId]);
+      hPedestal_5p1[gainId] = new TH1F(Form("Pedestal_5p1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 5+1 gain x%d", gainValues[gainId]);
+      hTotNoise_5p1[gainId] = new TH1F(Form("TotNoise_5p1_%d", gainId),
+					   hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Noise 6+1 9 gain x%d", gainValues[gainId]);
+      hNoise_6p1_9[gainId] = new TH1F(Form("Noise_6p1_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 6+1 25 gain x%d", gainValues[gainId]);
+      hNoise_6p1_25[gainId] = new TH1F(Form("Noise_6p1_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 6+1 gain x%d", gainValues[gainId]);
+      hPedestal_6p1[gainId] = new TH1F(Form("Pedestal_6p1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 6+1 gain x%d", gainValues[gainId]);
+      hTotNoise_6p1[gainId] = new TH1F(Form("TotNoise_6p1_%d", gainId),
+				    hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Noise 7+1 9 gain x%d", gainValues[gainId]);
+      hNoise_7p1_9[gainId] = new TH1F(Form("Noise_7p1_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 7+1 25 gain x%d", gainValues[gainId]);
+      hNoise_7p1_25[gainId] = new TH1F(Form("Noise_7p1_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 7+1 gain x%d", gainValues[gainId]);
+      hPedestal_7p1[gainId] = new TH1F(Form("Pedestal_7p1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 7+1 gain x%d", gainValues[gainId]);
+      hTotNoise_7p1[gainId] = new TH1F(Form("TotNoise_7p1_%d", gainId),
+					   hTitle.c_str(), 100, 0., noiseup[gainId]);
+      
+      hTitle = Form("Noise 8+1 9 gain x%d", gainValues[gainId]);
+      hNoise_8p1_9[gainId] = new TH1F(Form("Noise_8p1_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 8+1 25 gain x%d", gainValues[gainId]);
+      hNoise_8p1_25[gainId] = new TH1F(Form("Noise_8p1_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 8+1 gain x%d", gainValues[gainId]);
+      hPedestal_8p1[gainId] = new TH1F(Form("Pedestal_8p1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 8+1 gain x%d", gainValues[gainId]);
+      hTotNoise_8p1[gainId] = new TH1F(Form("TotNoise_8p1_%d", gainId),
+					   hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Noise 9+1 9 gain x%d", gainValues[gainId]);
+      hNoise_9p1_9[gainId] = new TH1F(Form("Noise_9p1_9_%d", gainId),
+					  hTitle.c_str(), 100, 0., sum9up[gainId]);
+      hTitle = Form("Noise 9+1 25 gain x%d", gainValues[gainId]);
+      hNoise_9p1_25[gainId] = new TH1F(Form("Noise_9p1_25_%d", gainId),
+					   hTitle.c_str(), 100, 0., sum25up[gainId]);
+      hTitle = Form("Pedestal 9+1 gain x%d", gainValues[gainId]);
+      hPedestal_9p1[gainId] = new TH1F(Form("Pedestal_9p1_%d", gainId),
+					   hTitle.c_str(), 100, -0.5, 0.5);
+      hTitle = Form("Tot Noise 9+1 gain x%d", gainValues[gainId]);
+      hTotNoise_9p1[gainId] = new TH1F(Form("TotNoise_9p1_%d", gainId),
+					   hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      /*
+      hTitle = Form("Number entries for hits gain x%d", gainValues[gainId]);
+      hEntriesHit[gainId] = new TH1F(Form("EntriesHit_%d", gainId),
+					 hTitle.c_str(), 1700, 1., 1701.);
+      hTitle = Form("Pedestal for hits gain x%d", gainValues[gainId]);
+      hPedestalHit[SM][gainId] = new TH1F(Form("PedestalHit_SM%d_%d", SM + 1, gainId),
+					  hTitle.c_str(),  100, -10., 10.);
+      hTitle = Form("Tot Noise for hits gain x%d", gainValues[gainId]);
+      hTotNoiseHit[SM][gainId] = new TH1F(Form("TotNoiseHit_SM%d_%d", SM + 1, gainId),
+					  hTitle.c_str(), 100, 0., hitup[gainId]);
+      hTitle = Form("Pedestal for hits vs channel number, gain x%d", gainValues[gainId]);
+      hPedestalSMHit[SM][gainId] = new TH1F(Form("PedestalSMHit_SM%d_%d", SM + 1, gainId),
+					    hTitle.c_str(), 1700,1., 1701.);
+      hTitle = Form("Tot Noise for hits vs channel number, gain x%d", gainValues[gainId]);
+      hTotNoiseSMHit[SM][gainId] = new TH1F(Form("TotNoiseSMHit_SM%d_%d", SM + 1, gainId),
+					    hTitle.c_str(), 1700,1., 1701.);
+      */
+    }  // loop on gain
+    //    TH2F** hCorrEB = new TH2F*[kEBChannels];
+
+    float Totmean = 0.;
+    float Totsig = 0.;
+    //    float LFmean = 0.;
+    float LFsig = 0.;
+    //    float HFmean = 0.;
+    float HFsig = 0.;
+    noise_1_.resize(kEBChannels*kGains, 0.);
+    noise_25_.resize(kEBChannels*kGains, 0.);
+    noisesum_25_.resize(kEBChannels*kGains, 0.);
+    nXtals_25_.resize(kEBChannels*kGains, 0);
+    noise_9_.resize(kEBChannels*kGains, 0.);
+    noisesum_9_.resize(kEBChannels*kGains, 0.);
+    nXtals_9_.resize(kEBChannels*kGains, 0);
+
+    noiseSingle_25_.resize(kEBChannels*kGains, 0.);
+    noiseSingle_9_.resize(kEBChannels*kGains, 0.);
+
+    noise_5_25_.resize(kEBChannels*kGains, 0.);
+    noise_5_9_.resize(kEBChannels*kGains, 0.);
+
+    noise_3p5_.resize(kEBChannels*kGains, 0.);
+    noise_3p5_25_.resize(kEBChannels*kGains, 0.);
+    noise_3p5_9_.resize(kEBChannels*kGains, 0.);
+  
+  
+    noise_2p1_25_.resize(kEBChannels*kGains, 0.);
+    noise_2p1_9_.resize(kEBChannels*kGains, 0.);
+    noise_3p1_25_.resize(kEBChannels*kGains, 0.);
+    noise_3p1_9_.resize(kEBChannels*kGains, 0.);
+  
+    noise_4p1_25_.resize(kEBChannels*kGains, 0.);
+    noise_4p1_9_.resize(kEBChannels*kGains, 0.);
+  
+    noise_5p1_25_.resize(kEBChannels*kGains, 0.);
+    noise_5p1_9_.resize(kEBChannels*kGains, 0.);
+
+    noise_6p1_25_.resize(kEBChannels*kGains, 0.);
+    noise_6p1_9_.resize(kEBChannels*kGains, 0.);
+
+    noise_7p1_25_.resize(kEBChannels*kGains, 0.);
+    noise_7p1_9_.resize(kEBChannels*kGains, 0.);
+  
+    noise_8p1_25_.resize(kEBChannels*kGains, 0.);
+    noise_8p1_9_.resize(kEBChannels*kGains, 0.);
+  
+    noise_9p1_25_.resize(kEBChannels*kGains, 0.);
+    noise_9p1_9_.resize(kEBChannels*kGains, 0.);
+    int Noentry[36][68][3];
+    int NoentrySM[36][3];
+    //    int NoentryHit[36][68][3];
+    for (int gainId = 0; gainId < kGains; gainId++) {
+      for (int SM = 0; SM <36; SM++) {
+	NoentrySM[SM][gainId] = 0;
+	for (int tower = 0; tower < 68; tower++) {
+	  Noentry[SM][tower][gainId] = 0;
+	  //	  NoentryHit[SM][tower][gainId] = 0;
+	}
+      }
+    }
+
+    Int_t maxGain, minGain;
+    if(runType_ == "Pedes") {
+      minGain = 0;
+      maxGain = kGains;
+    }
+    else if(runType_ == "Ped_6") {
+      minGain = 1;
+      maxGain = 2;
+    }
+    else if(runType_ == "Other") {
+      minGain = 0;
+      maxGain = 1; // only gain 12
+    }
+    else if(runType_ == "Calib") {
+      minGain = 0;
+      maxGain = 1; // only gain 12
+    }
+    else {
+      cout << " unknown run Type" << runType_ << endl;
+      minGain = 0;
+      maxGain = 1; // only gain 12
+    }
+
+    vector<int>::iterator result;
+    int GoodEBChannels = 0, GoodEBChannelsEta[2][17];
+    Double_t corrMean[10][10], corrMeanEta[2][17][10][10];
+    Double_t corrRSM[10][10], corrRMSEta[2][17][10][10];
+    for(int is1 = 0; is1 < 10; is1++) {
+      for(int is2 = 0; is2 <= is1; is2++) {
+	corrMean[is1][is2] = 0;
+	corrRSM[is1][is2] = 0;
+	for(int side = 0; side < 2; side++) {
+	  for(int eta = 0; eta < 17; eta++) {
+	    corrMeanEta[side][eta][is1][is2] = 0;
+	    corrRMSEta[side][eta][is1][is2] = 0;
+	  }
+	}
+      }
+    }
+    for(int side = 0; side < 2; side++)
+      for(int eta = 0; eta < 17; eta++)
+	GoodEBChannelsEta[side][eta] = 0;
+
+    // Loop over Ecal barrel
+    for (int iChannel = 0; iChannel < kEBChannels; iChannel++) {
+      EBDetId myEBDetId = EBDetId::unhashIndex(iChannel);
+      int ieta = myEBDetId.ieta();  // -85:-1,1:85
+      int iphi = myEBDetId.iphi();  // 1:360
+      int iChperSM = myEBDetId.ic(); // 1:1700
+      int ietaSM = myEBDetId.ietaSM();  // 1:85
+      int iphiSM = myEBDetId.iphiSM();  // 1:20
+      int SM = myEBDetId.ism();  // 1:36
+      int towerID = myEBDetId.tower().iTT(); // 1:68
+      int SMm1 = SM - 1;  // 0:35 for arrays
+    //    if(iphi == 1 || iphi == 360) 
+    //      cout << " channel " << iChannel
+    //    	   << " phi " <<  iphi
+    //    	   << " eta " << ieta
+    //    	   << " SM " << SM 
+    //    	   << " nb in SM " << iChperSM
+    //    	   << " eta in SM " << ietaSM
+    //    	   << " phi in SM " << iphiSM
+    //    	   << endl;
+      if(SM < 1 || SM > 36)  cout << "**** Aie ***  channel " << iChannel
+				  << " SM " << SM << endl;
+      int ietamin = ieta - 2;
+      int ietamax = ieta + 2;
+      if(ieta > 0) {  // take care there is no eta = 0 !!!
+	ietamin = ieta - 3;
+	ietamax = ieta + 1;
+      }
+      bool alreadyKnownDead = false;
+      result = find(maskedChannels_.begin(), maskedChannels_.end(), iChannel);
+      if (result != maskedChannels_.end()) alreadyKnownDead = true;
+      // Loop over different gains
+      for (int gainId = 0; gainId < 3; gainId++) { 
+	int arrayId = gainId*kEBChannels + iChannel;
+	// 3+5 weights method
+	if (nEntriesSingle_[arrayId]) {
+	  double xmean = pedestal_3p5_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  double sigmean = pedestal2_3p5_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  //	hPedestal_3p5[SMm1][gainId]->Fill(Totmean);
+	  //	hTotNoise_3p5[SMm1][gainId]->Fill(Totsig);
+	  hPedestal_3p5[gainId]->Fill(Totmean);
+	  hTotNoise_3p5[gainId]->Fill(Totsig);
+	  hEBNoise3p5[gainId]->Fill(iphi,ieta,Totsig);
+	  noise_3p5_[arrayId] = Totsig;
+	  // Compute 3+5 Sample sliding windows Sum9 and sum25
+	  // do not use intercalibration coeffiecents
+	  //	double Int2 = IntercalibCoeff[iChannel] * IntercalibCoeff[iChannel];
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_3p5_25_[id] += Totsig2;
+		  //		if(gainId == 0 && iphi == 1) 
+		//		  cout << " ip " << ip << " ie " << ie << " id " << id << endl;
+		// do not use intercalibration coeffiecents
+		//		noise_3p5_25_[id] += Totsig2*Int2;
+		//		noisesum_5_25_[id] += Totsig;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && 
+		     ie != ietamax) {
+		    // do not use intercalibration coeffiecents
+		    //		  noise_3p5_9_[id] += Totsig2*Int2;
+		    noise_3p5_9_[id] += Totsig2;
+		    //		  noisesum_5_9_[id] += Totsig;
+		  }
+		}
+	      }
+	    }
+	  } // End sliding windows computation
+	}  // nEntriesSingle_
+
+	// Standard way...	
+	if (nEntriesStandard_[arrayId]) {
+	  double xmean = pedestalStandard_[arrayId] / double(nEntriesStandard_[arrayId]);
+	  Totmean = xmean;
+	  double sigmean = pedestal2Standard_[arrayId] / double(nEntriesStandard_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  if (Totsig == 0. || Totsig > noisecut[gainId])
+	    cout << " Channel " <<  iChannel
+		 << " SM " << SM << " SMCal " << SMCal[SMm1] 
+		 << " towerID " << towerID
+		 << " eta " << ietaSM << " phi " << iphiSM
+		 << " nb in SM " << iChperSM
+		 << " gain x" <<  gainValues[gainId]
+		 << " Tot noise " << Totsig
+		 << endl;
+	  if(!alreadyKnownDead && (Totmean < 170. || Totmean > 300.)) 
+	    cout << "++++++++++++++++++++++++++\n"
+		 << "+ new dead channel " << iChannel << " +\n"
+		 << "+       ped " <<  Totmean << "       +\n"
+		 << "++++++++++++++++++++++++++\n" << endl;
+	  if(!alreadyKnownDead && Totsig == 0)
+	    cout << "++++++++++++++++++++++++++\n"
+		 << "+ new dead channel " << iChannel << " +\n"
+		 << "+          RMS 0         +\n"
+		 << "++++++++++++++++++++++++++\n" << endl;
+	  if(gainId == 0) fPedestal << std::setw(5) << iChannel << " "
+				    << std::setw(3) << iphi << " "
+				    << std::setw(3) << ieta << " ";
+	  fPedestal << std::setw(7) << std::setprecision(5) << xmean << " " 
+		    << std::setw(7) << std::setprecision(4) << Totsig << " ";
+	  hEBPed[gainId]->Fill(iphi,ieta,xmean);
+	  //	float eta = ieta;
+	  //	if(ieta > 0) eta = ieta - 1;
+	  hEBNoise[gainId]->Fill(iphi,ieta,Totsig);
+	  //	hEntries[SMm1][gainId]->Fill(iChperSM,nEntriesStandard_[arrayId]);
+	  //	hPedestal[SMm1][gainId]->Fill(Totmean);
+	  //	hTotNoise[SMm1][gainId]->Fill(Totsig);
+	  hPedestal[gainId]->Fill(Totmean);
+	  hTotNoise[gainId]->Fill(Totsig);
+	  if(noise_3p5_[arrayId] != 0) hNoise_3p5vsTot[gainId]->Fill(Totsig,noise_3p5_[arrayId]);
+	  //	hPedestalSM[SMm1][gainId]->Fill(iChperSM, Totmean);
+	  //	hTotNoiseSM[SMm1][gainId]->Fill(iChperSM, Totsig);
+	  //	hPedestalVsPos[SMm1][gainId]->SetBinContent(ietaSM, iphiSM, Totmean);
+	  hTotalNoiseVsPos[SMm1][gainId]->SetBinContent(ietaSM, iphiSM, Totsig);
+	  // Compute sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_25_[id] += Totsig2;
+		  noisesum_25_[id] += Totsig;
+		  nXtals_25_[id]++;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_9_[id] += Totsig2;
+		    noisesum_9_[id] += Totsig;
+		    nXtals_9_[id]++;
+		  }
+		}
+	      }
+	    }
+	  } // End sliding windows computation
+	  // Low Frequency noise
+	  xmean = avgSamples_[arrayId] / double(nEntriesAvg_[arrayId]);
+	  //	  LFmean = xmean;
+	  sigmean = avgSample2_[arrayId] / double(nEntriesAvg_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  if(Totsig2 >= 0.)
+	    LFsig = sqrt(sigmean - xmean * xmean);
+	  else {
+	    cout << "EB channel " << iChannel << " pb with LF variance " << Totsig2 << " sigmean " << sigmean
+		 << " xmean " << xmean * xmean << endl;
+	    LFsig = 0.0;
+	  }
+	  //	hLFNoise[SMm1][gainId]->Fill(LFsig);
+	  //	hLFNoiseSM[SMm1][gainId]->Fill(iChperSM, LFsig);
+	  hLFNoise[gainId]->Fill(LFsig);
+	  fPedestal << std::setw(7) << std::setprecision(4) << LFsig << " ";
+	  hEBNoiseLF[gainId]->Fill(iphi,ieta,LFsig);
+	  // High Frequency noise
+	  xmean = pedavg_[arrayId]/double(nEntriesStandard_[arrayId]);
+	  //	  HFmean = xmean;
+	  sigmean =  pedavg2_[arrayId]/double(nEntriesStandard_[arrayId]);
+	  HFsig = sqrt(sigmean - xmean * xmean);
+	  //	hHFNoise[SMm1][gainId]->Fill(HFsig);
+	  //	hHFNoiseSM[SMm1][gainId]->Fill(iChperSM, HFsig);
+	  hHFNoise[gainId]->Fill(HFsig);
+	  fPedestal << std::setw(7) << std::setprecision(4) << HFsig;
+	  hEBNoiseHF[gainId]->Fill(iphi,ieta,HFsig);
+	}  // entries > 0
+	else {
+	  Noentry[SMm1][towerID - 1][gainId]++;
+	  NoentrySM[SMm1][gainId]++;
+	  double xmean = -999.;
+	  double Totsig = -999.;
+	  double LFsig = -999.;
+	  double HFsig = -999.;
+	  if(gainId == 0) fPedestal << std::setw(5) << iChannel << " "
+				    << std::setw(3) << iphi << " "
+				    << std::setw(3) << ieta << " ";
+	  fPedestal << std::setw(7) << std::setprecision(5) << xmean << " " 
+		    << std::setw(7) << std::setprecision(4) << Totsig << " ";
+	  fPedestal << std::setw(7) << std::setprecision(4) << LFsig << " ";
+	  fPedestal << std::setw(7) << std::setprecision(4) << HFsig;
+	//	cout << " No Standard entry for channel " << iChannel << " gain " << gainId 
+	//	     << " SM " << SM << " SMCal " << SMCal[SMm1] 
+	//	     << " towerID " << towerID
+	//	     << " eta " << ietaSM << " phi " << iphiSM
+	//	     << endl;
+	}  // nEntriesStandard
+
+      // using only 1 single sample (6th)
+	if (nEntriesSingle_[arrayId]) {
+	  double xmean = pedestalSingle_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  double sigmean = pedestal2Single_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestalSingle[gainId]->Fill(Totmean);
+	  hTotNoiseSingle[gainId]->Fill(Totsig);
+	  // Compute Single Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		//	      if((ieta > 0 && ie > 0 && ie <= 85)
+		//		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+		//		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noiseSingle_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noiseSingle_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End sliding windows computation
+
+	  // 5-weights method
+	  xmean = pedestal_5_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_5_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_5[gainId]->Fill(Totmean);
+	  hTotNoise_5[gainId]->Fill(Totsig);
+	  // Compute 5-weights sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		//	      if((ieta > 0 && ie > 0 && ie <= 85)
+		//		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+		//		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_5_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_5_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 5+1 sliding windows computation
+
+	  // 2+1 weights method
+	  xmean = pedestal_2p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_2p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_2p1[gainId]->Fill(Totmean);
+	  hTotNoise_2p1[gainId]->Fill(Totsig);
+	  // Compute 5+1 Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		//	      if((ieta > 0 && ie > 0 && ie < 85)
+		//		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+		//		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_2p1_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_2p1_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 2+1 sliding windows computation
+
+	  // 3+1 weights method
+	  xmean = pedestal_3p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_3p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_3p1[gainId]->Fill(Totmean);
+	  hTotNoise_3p1[gainId]->Fill(Totsig);
+	  // Compute 3+1 Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		//	      if((ieta > 0 && ie > 0 && ie <= 85)
+		//		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+		//		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_3p1_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_3p1_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 3+1sliding windows computation
+
+	  // 4+1 weights method
+	  xmean = pedestal_4p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_4p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_4p1[gainId]->Fill(Totmean);
+	  hTotNoise_4p1[gainId]->Fill(Totsig);
+	  // Compute 4+1 Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		//	      if((ieta > 0 && ie > 0 && ie <= 85)
+		//		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+		//		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_4p1_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_4p1_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 4+1 sliding windows computation
+
+	  // 5+1 weights method
+	  xmean = pedestal_5p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_5p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_5p1[gainId]->Fill(Totmean);
+	  hTotNoise_5p1[gainId]->Fill(Totsig);
+	  // Compute 5+1 Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		//	      if((ieta > 0 && ie > 0 && ie <= 85)
+		//		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+		//		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_5p1_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_5p1_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 5+1 sliding windows computation
+
+	  // 6+1 weights method
+	  xmean = pedestal_6p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_6p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_6p1[gainId]->Fill(Totmean);
+	  hTotNoise_6p1[gainId]->Fill(Totsig);
+	// Compute 6+1 Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+	      //	      if((ieta > 0 && ie > 0 && ie <= 85)
+	      //		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+	      //		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_6p1_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_6p1_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 6+1 sliding windows computation
+
+	  // 7+1 weights method
+	  xmean = pedestal_7p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_7p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_7p1[gainId]->Fill(Totmean);
+	  hTotNoise_7p1[gainId]->Fill(Totsig);
+	  // Compute 7+1 Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+		//	      if((ieta > 0 && ie > 0 && ie <= 85)
+		//		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+		//		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_7p1_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_7p1_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 7+1 sliding windows computation
+
+	  // 8+1 weights method
+	  xmean = pedestal_8p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_8p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_8p1[gainId]->Fill(Totmean);
+	  hTotNoise_8p1[gainId]->Fill(Totsig);
+	  // Compute 8+1 Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+	      //	      if((ieta > 0 && ie > 0 && ie <= 85)
+	      //		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+	      //		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_8p1_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_8p1_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 8+1 sliding windows computation
+
+	  // 9+1 weights method
+	  xmean = pedestal_9p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_9p1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_9p1[gainId]->Fill(Totmean);
+	  hTotNoise_9p1[gainId]->Fill(Totsig);
+	  // Compute 9+1 Sample sliding windows Sum9 and sum25
+	  for (int ip = iphi-2; ip <= iphi+2; ++ip) {
+	    if(ip > 0 && ip <= 360) {
+	      for (int ie = ietamin; ie <= ietamax; ++ie) {
+	      //	      if((ieta > 0 && ie > 0 && ie <= 85)
+	      //		 || (ieta < 0 && ie < 0 && ie >= -85)) {
+	      //		int id = gainId * kEBChannels + ie * 20 + ip;
+		if (ie >= -85  && ie < 85 ) {
+		  int id =  gainId * kEBChannels + (85 + ie) * 360 + ip -1;
+		  noise_9p1_25_[id] += Totsig2;
+		  if(ip != iphi-2 && ip != iphi+2 && ie != ietamin && ie != ietamax) {
+		    noise_9p1_9_[id] += Totsig2;
+		  }
+		}
+	      }
+	    }
+	  } // End 9+1 sliding windows computation
+
+	  // 3+1 weights method sliding 1
+	  xmean = pedestal_3g1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_3g1_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_3g1[gainId]->Fill(Totmean);
+	  hTotNoise_3g1[gainId]->Fill(Totsig);
+	  // 3+1 weights method sliding 2
+	  xmean = pedestal_3g2_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_3g2_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_3g2[gainId]->Fill(Totmean);
+	  hTotNoise_3g2[gainId]->Fill(Totsig);
+	  // 3+1 weights method sliding 3
+	  xmean = pedestal_3g3_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_3g3_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_3g3[gainId]->Fill(Totmean);
+	  hTotNoise_3g3[gainId]->Fill(Totsig);
+	// 3+1 weights method sliding 4
+	  xmean = pedestal_3g4_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_3g4_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_3g4[gainId]->Fill(Totmean);
+	  hTotNoise_3g4[gainId]->Fill(Totsig);
+	  // 3+1 weights method sliding 5
+	  xmean = pedestal_3g5_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_3g5_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_3g5[gainId]->Fill(Totmean);
+	  hTotNoise_3g5[gainId]->Fill(Totsig);
+	  // 3+1 weights method sliding 6
+	  xmean = pedestal_3g6_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_3g6_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_3g6[gainId]->Fill(Totmean);
+	  hTotNoise_3g6[gainId]->Fill(Totsig);
+	  // 3+1 weights method sliding 7
+	  xmean = pedestal_3g7_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totmean = xmean;
+	  sigmean = pedestal2_3g7_[arrayId] / double(nEntriesSingle_[arrayId]);
+	  Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hPedestal_3g7[gainId]->Fill(Totmean);
+	  hTotNoise_3g7[gainId]->Fill(Totsig);
+	}  // nEntriesSingles not 0
+	else {
+	  //	cout << " No entry Single for channel " <<  iChannel << " gain " << gainId << endl;
+	}
+
+
+	//  Now uncalib hits
+	if (nEntriesHit_[arrayId]) {
+	  double xmean = pedestalHit_[arrayId] / double(nEntriesHit_[arrayId]);
+	  Totmean = xmean;
+	  double sigmean = pedestal2Hit_[arrayId] / double(nEntriesHit_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  noise_1_[arrayId] = Totsig;
+	  //       	if (Totsig > noisecut[gainId])
+	  //	  cout << " Channel " <<  iChannel 
+	  //		    << " gain x" <<  gainValues[gainId]
+	  //		    << " Tot noise " << Totsig
+	  //		    << endl;
+	  /*
+	    hEntriesHit[SMm1][gainId]->Fill(iChperSM,nEntriesHit_[arrayId]);
+	    hPedestalHit[SMm1][gainId]->Fill(Totmean);
+	    hTotNoiseHit[SMm1][gainId]->Fill(Totsig);
+	    hPedestalSMHit[SMm1][gainId]->Fill(iChperSM, Totmean);
+	    hTotNoiseSMHit[SMm1][gainId]->Fill(iChperSM, Totsig);
+	  */
+	  hEBNoiseHit[gainId]->Fill(iphi,ieta,Totsig);
+	  hPedestalHit[gainId]->Fill(Totmean);
+	  hTotNoiseHit[gainId]->Fill(Totsig);
+	}  // nEntries not 0
+	//	else {
+	//	  NoentryHit[SMm1][towerID - 1][gainId]++;
+	  //	cout << " UncalibHits : no entry for channel " <<  iChannel << " gain x" <<  gainValues[gainId] << endl;
+	//	}
+	//  Now MinMax hits
+	if (nEntriesMinMax_[arrayId]) {
+	  double xmean = pedestalMinMax_[arrayId] / double(nEntriesMinMax_[arrayId]);
+	  Totmean = xmean;
+	  double sigmean = pedestal2MinMax_[arrayId] / double(nEntriesMinMax_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  hEBNoiseMinMax[gainId]->Fill(iphi,ieta,Totsig);
+	  hPedestalMinMax[gainId]->Fill(Totmean);
+	  hTotNoiseMinMax[gainId]->Fill(Totsig);
+	}  // nEntries not 0
+
+      }  // End loop over gains
+      fPedestal << std::endl;
+      if (!alreadyKnownDead && nEntriesStandard_[iChannel]) {
+	GoodEBChannels++;
+	(*vCovMatEB)[iChannel]->ComputeEstimators();
+	//	if(iChannel%10000 == 0) {
+	//	  hCorrEB[iChannel] = new TH2F(Form("CorrEB_%d", iChannel),
+	//				     Form("EB Time correlation xl %d", iChannel),
+	//				     10 , 0., 10. , 10, 0., 10.);
+	//	} // choosen channel
+	int eta = (myEBDetId.ietaSM() - 1)/5;    // from 1-85 to 0-16
+	if(eta < 0 || eta > 16) {
+	  cout << " problem with channel " << iChannel << " eta = " << eta << endl;
+	  exit(-1);
+	}
+	int side = 0;
+	if(ieta > 0) side = 1;
+	GoodEBChannelsEta[side][eta]++;
+	for(int is1 = 0; is1 < 10; is1++) {
+	  for(int is2 = 0; is2 <= is1; is2++) {
+	    float corr = (*vCovMatEB)[iChannel]->getCorrelation(is1, is2);
+	    corrMean[is1][is2] += corr;
+	    corrRSM[is1][is2] += corr * corr;
+	    corrMeanEta[side][eta][is1][is2] += corr;
+	    corrRMSEta[side][eta][is1][is2] += corr * corr;
+	    //	    if(iChannel%10000 == 0) {
+	    //	      hCorrEB[iChannel]->Fill(is1, is2, corr);
+	    //	      if(is2 !=is1) hCorrEB[iChannel]->Fill(is2, is1, corr);
+	    //	    }
+	  }
+	  //	cout << endl;
+	}  // end loop over samples
+	//	     if(iChannel%10000 == 0) hCorrEB[iChannel]->Write();
+      } // good channel
+      for (int gainId = 2; gainId > -1; gainId--) { 
+	int arrayId = gainId*kEBChannels + iChannel;
+	if (nEntriesStandard_[arrayId]) {
+	  if(gainId == 2) {
+	    if(SM <10) fDQM << "55555  10110" << SM;
+	    else fDQM << "55555  1011" << SM;
+	    if(iChperSM < 10) fDQM << "000" << iChperSM;
+	    else if(iChperSM < 100) fDQM << "00" << iChperSM;
+	    else if(iChperSM < 1000) fDQM << "0" << iChperSM;
+	    else fDQM  << iChperSM;
+	  }
+	  double xmean = pedestalStandard_[arrayId] / double(nEntriesStandard_[arrayId]);
+	  double sigmean = pedestal2Standard_[arrayId] / double(nEntriesStandard_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  Totsig = sqrt(Totsig2);
+	  fDQM << std::setw(7) << std::setprecision(5) << xmean << " " 
+	       << std::setw(7) << std::setprecision(4) << Totsig << " ";
+	  if(gainId == 0) fDQM << " 0" << std::endl;
+	}  // only if read out
+      }   // End loop over gains
+    }    // End loop over channels
+    // print missing SM and towers
+    for (int gainId = minGain; gainId < maxGain; gainId++) { 
+      for (int SM = 0; SM <36; SM++) {
+	if(NoentrySM[SM][gainId] == 1700)
+	  cout << " No entry for SM " << SM + 1 << " SMCal " << SMCal[SM] 
+	       << " gain " <<  gainValues[gainId]
+	       << endl;
+	else {
+	  for (int tower = 0; tower < 68; tower++) {
+	    if(Noentry[SM][tower][gainId] > 0)
+	      cout << " No entry for " << Noentry[SM][tower][gainId] 
+		   << " channels in tower " << tower + 1
+		   << " SM " << SM + 1 << " SMCal " << SMCal[SM] 
+		   << " gain " <<  gainValues[gainId]
+		   << endl;
+	    /*
+	    if(NoentryHit[SM][tower][gainId] != Noentry[SM][tower][gainId])
+	      cout << " Hits no entry for " << NoentryHit[SM][tower][gainId] 
+		   << " channels in tower " << tower + 1
+		   << " SM " << SM + 1 << " SMCal " << SMCal[SM] 
+		   << " gain " << gainId 
+		   << endl;
+	    */
+	  }
+	}
+      }
+    }  // loop over gains
+
+    // check sliding windows computation
+    // Loop over Ecal barrel channels
+    for (int iChannel = 0; iChannel < kEBChannels; iChannel++) {
+      //      EBDetId myEBDetId = EBDetId::unhashIndex(iChannel);
+      //    int ietaSM = myEBDetId.ietaSM();
+      //    int iphiSM = myEBDetId.iphiSM();
+      //    int SM = myEBDetId.ism();  // 1:36
+      //    int SMm1 = SM - 1;
+      for (int gainId = 0; gainId < kGains; gainId++) {
+	int arrayId = gainId*kEBChannels + iChannel;
+	//  hits
+	if(nXtals_9_[arrayId] > 0 && nXtals_25_[arrayId] > 0) {
+	  float noise9 = sqrt(noise_9_[arrayId] / nXtals_9_[arrayId]);
+	  float noise25 = sqrt(noise_25_[arrayId] / nXtals_25_[arrayId]);
+	  float noisesum25 = noisesum_25_[arrayId];
+	  float noisesum9 = noisesum_9_[arrayId];
+	  //      float noise25ratio = 1 - noisesum25/noise25;
+	  //      float noise9ratio = 1 - noisesum9/noise9;
+	  float corr25 = sqrt(noise25*noise25-noisesum25*noisesum25);
+	  float corrp25 = corr25/noise25;
+	  float corr9 = sqrt(noise9*noise9-noisesum9*noisesum9);
+	  float corrp9 = corr9/noise9;
+	  //      hTotNoise25[SMm1][gainId]->Fill(noise25ratio);
+	  //      hTotNoise9[SMm1][gainId]->Fill(noise9ratio);
+	  //      hTotNoise25VsPos[SMm1][gainId]->SetBinContent(ieta + 1, iphi + 1, noise25ratio);
+	  //      hTotNoise9VsPos[SMm1][gainId]->SetBinContent(ieta + 1, iphi + 1, noise9ratio);
+	  //	hNoise_25VsPos[SMm1][gainId]->SetBinContent(ietaSM, iphiSM, noise25);
+	  //	hNoise_9VsPos[SMm1][gainId]->SetBinContent(ietaSM, iphiSM, noise9);
+	  hNoise_25Xt[gainId]->Fill(noisesum25);
+	  hNoise_9Xt[gainId]->Fill(noisesum9);
+	  //	hNoise_25XtVsPos[SMm1][gainId]->SetBinContent(ietaSM, iphiSM, noisesum25);
+	//	hNoise_9XtVsPos[SMm1][gainId]->SetBinContent(ietaSM, iphiSM, noisesum9);
+	  hTotCorr25[gainId]->Fill(corr25);
+	  hTotCorrp25[gainId]->Fill(corrp25);
+	  hTotCorr9[gainId]->Fill(corr9);
+	  hTotCorrp9[gainId]->Fill(corrp9);
+	//	hTotCorr25VsPos[SMm1][gainId]->SetBinContent(ietaSM, iphiSM, corr25);
+	//	hTotCorr9VsPos[SMm1][gainId]->SetBinContent(ietaSM, iphiSM, corr9);
+	}
+	// hits
+
+	// Sliding windows a la Alex
+	//      if(ieta > 0 && ieta < 84 && iphi > 0  && iphi < 19) {
+	//      if(ieta > -85  && ieta < 85 && iphi > 1  && iphi < 360) {
+	if(nXtals_9_[arrayId] == 9) {
+	//	hNoise9[SMm1][gainId]->Fill(sqrt(noise_9_[arrayId]));
+	/*
+	hNoise_9[SMm1][gainId]->Fill(sqrt(noise_9_[arrayId]));
+	hNoiseSingle_9[SMm1][gainId]->Fill(sqrt(noiseSingle_9_[arrayId]));
+	hNoise_5_9[SMm1][gainId]->Fill(sqrt(noise_5_9_[arrayId]));
+	hNoise_3p5_9[SMm1][gainId]->Fill(sqrt(noise_3p5_9_[arrayId]));
+	hNoise_2p1_9[SMm1][gainId]->Fill(sqrt(noise_2p1_9_[arrayId]));
+	hNoise_3p1_9[SMm1][gainId]->Fill(sqrt(noise_3p1_9_[arrayId]));
+	hNoise_4p1_9[SMm1][gainId]->Fill(sqrt(noise_4p1_9_[arrayId]));
+	hNoise_5p1_9[SMm1][gainId]->Fill(sqrt(noise_5p1_9_[arrayId]));
+	hNoise_6p1_9[SMm1][gainId]->Fill(sqrt(noise_6p1_9_[arrayId]));
+	hNoise_7p1_9[SMm1][gainId]->Fill(sqrt(noise_7p1_9_[arrayId]));
+	hNoise_8p1_9[SMm1][gainId]->Fill(sqrt(noise_8p1_9_[arrayId]));
+	hNoise_9p1_9[SMm1][gainId]->Fill(sqrt(noise_9p1_9_[arrayId]));
+	*/
+	  hNoise_9[gainId]->Fill(sqrt(noise_9_[arrayId]));
+	  hNoiseSingle_9[gainId]->Fill(sqrt(noiseSingle_9_[arrayId]));
+	  hNoise_5_9[gainId]->Fill(sqrt(noise_5_9_[arrayId]));
+	  hNoise_3p5_9[gainId]->Fill(sqrt(noise_3p5_9_[arrayId]));
+	  hNoise_2p1_9[gainId]->Fill(sqrt(noise_2p1_9_[arrayId]));
+	  hNoise_3p1_9[gainId]->Fill(sqrt(noise_3p1_9_[arrayId]));
+	  hNoise_4p1_9[gainId]->Fill(sqrt(noise_4p1_9_[arrayId]));
+	  hNoise_5p1_9[gainId]->Fill(sqrt(noise_5p1_9_[arrayId]));
+	  hNoise_6p1_9[gainId]->Fill(sqrt(noise_6p1_9_[arrayId]));
+	  hNoise_7p1_9[gainId]->Fill(sqrt(noise_7p1_9_[arrayId]));
+	  hNoise_8p1_9[gainId]->Fill(sqrt(noise_8p1_9_[arrayId]));
+	  hNoise_9p1_9[gainId]->Fill(sqrt(noise_9p1_9_[arrayId]));
+	}
+      //      if(ieta > 1 && ieta < 83 && iphi > 1  && iphi < 18) {
+      //      if(ieta > -85 + 1  && ieta < 85 - 1 && iphi > 2  && iphi < 359) {
+	if(nXtals_25_[arrayId] == 25) {
+	//	hNoise25[SMm1][gainId]->Fill(sqrt(noise_25_[arrayId]));
+	/*
+	hNoise_25[SMm1][gainId]->Fill(sqrt(noise_25_[arrayId]));
+	hNoiseSingle_25[SMm1][gainId]->Fill(sqrt(noiseSingle_25_[arrayId]));
+	hNoise_5_25[SMm1][gainId]->Fill(sqrt(noise_5_25_[arrayId]));
+	hNoise_3p5_25[SMm1][gainId]->Fill(sqrt(noise_3p5_25_[arrayId]));
+	hNoise_2p1_25[SMm1][gainId]->Fill(sqrt(noise_2p1_25_[arrayId]));
+	hNoise_3p1_25[SMm1][gainId]->Fill(sqrt(noise_3p1_25_[arrayId]));
+	hNoise_4p1_25[SMm1][gainId]->Fill(sqrt(noise_4p1_25_[arrayId]));
+	hNoise_5p1_25[SMm1][gainId]->Fill(sqrt(noise_5p1_25_[arrayId]));
+ 	hNoise_6p1_25[SMm1][gainId]->Fill(sqrt(noise_6p1_25_[arrayId]));
+	hNoise_7p1_25[SMm1][gainId]->Fill(sqrt(noise_7p1_25_[arrayId]));
+	hNoise_8p1_25[SMm1][gainId]->Fill(sqrt(noise_8p1_25_[arrayId]));
+	hNoise_9p1_25[SMm1][gainId]->Fill(sqrt(noise_9p1_25_[arrayId]));
+	*/
+	  hNoise_25[gainId]->Fill(sqrt(noise_25_[arrayId]));
+	  hNoiseSingle_25[gainId]->Fill(sqrt(noiseSingle_25_[arrayId]));
+	  hNoise_5_25[gainId]->Fill(sqrt(noise_5_25_[arrayId]));
+	  hNoise_3p5_25[gainId]->Fill(sqrt(noise_3p5_25_[arrayId]));
+	  hNoise_2p1_25[gainId]->Fill(sqrt(noise_2p1_25_[arrayId]));
+	  hNoise_3p1_25[gainId]->Fill(sqrt(noise_3p1_25_[arrayId]));
+	  hNoise_4p1_25[gainId]->Fill(sqrt(noise_4p1_25_[arrayId]));
+	  hNoise_5p1_25[gainId]->Fill(sqrt(noise_5p1_25_[arrayId]));
+	  hNoise_6p1_25[gainId]->Fill(sqrt(noise_6p1_25_[arrayId]));
+	  hNoise_7p1_25[gainId]->Fill(sqrt(noise_7p1_25_[arrayId]));
+	  hNoise_8p1_25[gainId]->Fill(sqrt(noise_8p1_25_[arrayId]));
+	  hNoise_9p1_25[gainId]->Fill(sqrt(noise_9p1_25_[arrayId]));
+	}
+
+      }  // End loop over gains
+      //    fPedestal << endl;
+    }  // End loop over channels
+
+    for (int gainId = minGain; gainId < maxGain; gainId++) { 
+      hEBPed[gainId]->Write();
+      hEBNoise[gainId]->Write();
+      hEBNoiseLF[gainId]->Write();
+      hEBNoiseHF[gainId]->Write();
+      hEBNoise3p5[gainId]->Write();
+      hEBNoiseHit[gainId]->Write();
+      hEBNoiseMinMax[gainId]->Write();
+
+      hPedestal[gainId]->Write();
+      hTotNoise[gainId]->Write();
+      hLFNoise[gainId]->Write();
+      hHFNoise[gainId]->Write();
+
+      // hits
+      hPedestalHit[gainId]->Write();
+      hTotNoiseHit[gainId]->Write();
+      hPedestalMinMax[gainId]->Write();
+      hTotNoiseMinMax[gainId]->Write();
+
+      hNoise_25[gainId]->Write();
+      hNoise_9[gainId]->Write();
+      //    hNoise_25VsPos[gainId]->Write();
+      //    hNoise_9VsPos[gainId]->Write();
+      hNoise_25Xt[gainId]->Write();
+      hNoise_9Xt[gainId]->Write();
+      //    hNoise_25XtVsPos[gainId]->Write();
+      //    hNoise_9XtVsPos[gainId]->Write();
+      hTotCorr25[gainId]->Write();
+      hTotCorrp25[gainId]->Write();
+      hTotCorr9[gainId]->Write();
+      hTotCorrp9[gainId]->Write();
+      //    hTotCorr25VsPos[gainId]->Write();
+      //    hTotCorr9VsPos[gainId]->Write();
+
+      for(int SM = 1; SM < 37; SM++) {
+	int SMm1 = SM - 1;
+	/*
+      bool sEntries = 0; // save hEntries only when needed
+      for (int bin = 0; bin < 1700; bin++) {
+	if(hEntries[SMm1][gainId]->GetBinContent(bin) != 10 * kEventGains) sEntries = 1;
+      }
+      if(sEntries) hEntries[SMm1][gainId]->Write();
+
+      hPedestal[SMm1][gainId]->Write();
+      hTotNoise[SMm1][gainId]->Write();
+      hLFNoise[SMm1][gainId]->Write();
+      hHFNoise[SMm1][gainId]->Write();
+
+      hPedestalSM[SMm1][gainId]->Write();
+      hTotNoiseSM[SMm1][gainId]->Write();
+      hLFNoiseSM[SMm1][gainId]->Write();
+      hHFNoiseSM[SMm1][gainId]->Write();
+	*/
+      //      hPedestalVsPos[SMm1][gainId]->Write();
+
+	hTotalNoiseVsPos[SMm1][gainId]->Write();
+      }
+
+      hNoise_25[gainId]->Write();
+      hNoise_9[gainId]->Write();
+      //    hNoise_25VsPos[gainId]->Write();
+      //    hNoise_9VsPos[gainId]->Write();
+      hNoise_25Xt[gainId]->Write();
+      hNoise_9Xt[gainId]->Write();
+//    hNoise_25XtVsPos[gainId]->Write();
+//    hNoise_9XtVsPos[gainId]->Write();
+      hTotCorr25[gainId]->Write();
+      hTotCorrp25[gainId]->Write();
+      hTotCorr9[gainId]->Write();
+      hTotCorrp9[gainId]->Write();
+      //    hTotCorr25VsPos[gainId]->Write();
+      //    hTotCorr9VsPos[gainId]->Write();
+      //    hNoise9[SMm1][gainId]->Write();
+      //    hNoise25[SMm1][gainId]->Write();
+      
+      // Single
+      hPedestalSingle[gainId]->Write();
+      hTotNoiseSingle[gainId]->Write();
+      hNoiseSingle_9[gainId]->Write();
+      hNoiseSingle_25[gainId]->Write();
+      // 5-weights
+      hPedestal_5[gainId]->Write();
+      hTotNoise_5[gainId]->Write();
+      hNoise_5_9[gainId]->Write();
+      hNoise_5_25[gainId]->Write();
+      // 3+5 weights
+      hPedestal_3p5[gainId]->Write();
+      hTotNoise_3p5[gainId]->Write();
+      hNoise_3p5_9[gainId]->Write();
+      hNoise_3p5_25[gainId]->Write();
+      hNoise_3p5vsTot[gainId]->Write();
+      // 2+1 weights
+      hPedestal_2p1[gainId]->Write();
+      hTotNoise_2p1[gainId]->Write();
+      hNoise_2p1_9[gainId]->Write();
+      hNoise_2p1_25[gainId]->Write();
+      // 3+1 weights
+      hPedestal_3p1[gainId]->Write();
+      hTotNoise_3p1[gainId]->Write();
+      hNoise_3p1_9[gainId]->Write();
+      hNoise_3p1_25[gainId]->Write();
+      hPedestal_3g1[gainId]->Write();
+      hTotNoise_3g1[gainId]->Write();
+      hPedestal_3g2[gainId]->Write();
+      hTotNoise_3g2[gainId]->Write();
+      hPedestal_3g3[gainId]->Write();
+      hTotNoise_3g3[gainId]->Write();
+      hPedestal_3g4[gainId]->Write();
+      hTotNoise_3g4[gainId]->Write();
+      hPedestal_3g5[gainId]->Write();
+      hTotNoise_3g5[gainId]->Write();
+      hPedestal_3g6[gainId]->Write();
+      hTotNoise_3g6[gainId]->Write();
+      hPedestal_3g7[gainId]->Write();
+      hTotNoise_3g7[gainId]->Write();
+      // 4+1 weights
+      hPedestal_4p1[gainId]->Write();
+      hTotNoise_4p1[gainId]->Write();
+      hNoise_4p1_9[gainId]->Write();
+      hNoise_4p1_25[gainId]->Write();
+      // 5+1 weights
+      hPedestal_5p1[gainId]->Write();
+      hTotNoise_5p1[gainId]->Write();
+      hNoise_5p1_9[gainId]->Write();
+      hNoise_5p1_25[gainId]->Write();
+      // 6+1 weights
+      hPedestal_6p1[gainId]->Write();
+      hTotNoise_6p1[gainId]->Write();
+      hNoise_6p1_9[gainId]->Write();
+      hNoise_6p1_25[gainId]->Write();
+      // 7+1 weights
+      hPedestal_7p1[gainId]->Write();
+      hTotNoise_7p1[gainId]->Write();
+      hNoise_7p1_9[gainId]->Write();
+      hNoise_7p1_25[gainId]->Write();
+      // 8+1 weights
+      hPedestal_8p1[gainId]->Write();
+      hTotNoise_8p1[gainId]->Write();
+      hNoise_8p1_9[gainId]->Write();
+      hNoise_8p1_25[gainId]->Write();
+      // 9+1 weights
+      hPedestal_9p1[gainId]->Write();
+      hTotNoise_9p1[gainId]->Write();
+      hNoise_9p1_9[gainId]->Write();
+      hNoise_9p1_25[gainId]->Write();
+    }
+    /*
+    TH2F** hCorr = new TH2F*[kEBChannels];
+    Double_t corrMean[10][10];
+    Double_t corrRSM[10][10];
+    for(int is1 = 0; is1 < 10; is1++) {
+      for(int is2 = 0; is2 <= is1; is2++) {
+	corrMean[is1][is2] = 0;
+	corrRSM[is1][is2] = 0;
+      }
+    }
+
+    for (int ich = 0; ich < 6; ich++) {
+      int iChannel = 248;
+      if(ich > 1 && ich < 4) iChannel = 45784;
+      else if(ich > 3) iChannel = 46845;
+      string sZS = "";
+      if(ich%2 == 1) sZS = "ZS";
+      (*vCovMat)[ich]->ComputeEstimators();
+      hCorr[ich] = new TH2F(Form("Corr_%d", ich),
+			    Form("Time correlation Xl %d %s", iChannel,sZS.data()),
+			    10 , 0., 10. , 10, 0., 10.);
+      float ped = (*vCovMat)[ich]->getPedestal();
+      float noise = (*vCovMat)[ich]->getPedestalSigma();
+      if(ich%2 == 0) 
+	cout << " Channel " << iChannel << " Ped " << ped << " noise " << noise << endl;
+      else
+	cout << " Channel " << iChannel << " ZS Ped " << ped << " noise " << noise << endl;
+
+      for(int is1 = 0; is1 < 10; is1++) {
+	//	cout << " Sample " << is1;
+	for(int is2 = 0; is2 <= is1; is2++) {
+	  float corr = (*vCovMat)[ich]->getCorrelation(is1, is2);
+	  //	  cout << " " << corr;
+	  corrMean[is1][is2] += corr;
+	  corrRSM[is1][is2] += corr * corr;
+	  hCorr[ich]->Fill(is1, is2, corr);
+	  if(is2 !=is1) hCorr[ich]->Fill(is2, is1, corr);
+	}
+	//	cout << endl;
+      }
+      hCorr[ich]->Write();
+    }
+    */
+    TH2F* hCorrMeanEB = new TH2F("CorrMeanEB","mean Sample correlation",
+			       10 , 0., 10. , 10, 0., 10.);
+    TH2F* hCorrRMSEB = new TH2F("CorrRMSEB","RMS Sample correlation",
+			      10 , 0., 10. , 10, 0., 10.);
+    TH2F*** hCorrMeanEta = new TH2F**[2];
+    TH2F*** hCorrRMSEta = new TH2F**[2];
+    for(int side = 0; side < 2; side++) {
+      hCorrMeanEta[side] = new TH2F*[17];
+      hCorrRMSEta[side] = new TH2F*[17];
+      int zs = 1;
+      if(side == 0) zs = -1;
+      for(int eta = 0; eta < 17; eta++) {
+	hCorrMeanEta[side][eta] = new TH2F(Form("CorrMeanEta_%i_%i",side,eta),
+						 Form("mean Sample correlation side %i ring %i",zs, eta),
+						 10 , 0., 10. , 10, 0., 10.);
+	hCorrRMSEta [side][eta]= new TH2F(Form("CorrRMSEta_%i_%i",side,eta),
+						Form("RMS Sample correlation side %i ring %i",zs, eta),
+						10 , 0., 10. , 10, 0., 10.);
+      }
+    }
+    for(int is1 = 0; is1 < 10; is1++) {
+      for(int is2 = 0; is2 <= is1; is2++) {
+	double Mean = corrMean[is1][is2] / double(GoodEBChannels);
+	hCorrMeanEB->Fill(is1, is2, Mean);
+	if(is2 !=is1) hCorrMeanEB->Fill(is2, is1, Mean);
+	double RMS = corrRSM[is1][is2] / double(GoodEBChannels);
+	RMS = RMS - Mean * Mean;
+	RMS = sqrt(RMS);
+	hCorrRMSEB->Fill(is1, is2, RMS);
+	if(is2 !=is1) hCorrRMSEB->Fill(is2, is1, RMS);
+
+	for(int side = 0; side < 2; side++) {
+	  for(int eta = 0; eta < 17; eta++) {
+	    double Mean = corrMeanEta[side][eta][is1][is2] / double(GoodEBChannelsEta[side][eta]);
+	    hCorrMeanEta[side][eta]->Fill(is1, is2, Mean);
+	    if(is2 !=is1) hCorrMeanEta[side][eta]->Fill(is2, is1, Mean);
+	    double RMS = corrRMSEta[side][eta][is1][is2] / double(GoodEBChannelsEta[side][eta]);
+	    RMS = RMS - Mean * Mean;
+	    RMS = sqrt(RMS);
+	    hCorrRMSEta[side][eta]->Fill(is1, is2, RMS);
+	    if(is2 !=is1) hCorrRMSEta[side][eta]->Fill(is2, is1, RMS);
+	  }
+	}
+      }
+    }
+    hCorrMeanEB->Write();
+    hCorrRMSEB->Write();
+    for(int side = 0; side < 2; side++) {
+      for(int eta = 0; eta < 17; eta++) {
+	hCorrMeanEta[side][eta]->Write();
+	hCorrRMSEta [side][eta]->Write();
+      }
+    }
+  }  // barrel data present
+
+  if(nevent[5] > 0) {  // End cap data present
+    TH1F** hPedestalEE = new TH1F*[kGains];
+    TH1F** hTotNoiseEE = new TH1F*[kGains];
+    TH1F** hLFNoiseEE  = new TH1F*[kGains];
+    TH1F** hHFNoiseEE  = new TH1F*[kGains];
+
+    TH1F** hPedestalHitEE = new TH1F*[kGains];
+    TH1F** hTotNoiseHitEE = new TH1F*[kGains];
+
+    TH2F*** hEENoise   = new TH2F**[kGains];
+    TH2F*** hEENoiseLF = new TH2F**[kGains];
+    TH2F*** hEENoiseHF = new TH2F**[kGains];
+
+    TH2F** hCorrEE = new TH2F*[kEEChannels];
+
+    for (int gainId = 0; gainId < 3; gainId++) {
+      std::string hTitle = Form("Endcap Pedestal gain x%d", gainValues[gainId]);
+      hPedestalEE[gainId] = new TH1F(Form("PedestalEE_%d", gainId),
+				   hTitle.c_str(), 100, 150., 250.);
+      hTitle = Form("Endcap Tot Noise gain x%d", gainValues[gainId]);
+      hTotNoiseEE[gainId] = new TH1F(Form("TotNoiseEE_%d", gainId),
+				   hTitle.c_str(), 100, 0., noiseup[gainId]);
+      hTitle = Form("Endcap LF noise gain x%d", gainValues[gainId]);
+      hLFNoiseEE[gainId] = new TH1F(Form("LFNoiseEE_%d",  gainId),
+				  hTitle.c_str(), 100, 0., noiseup[gainId]);
+      hTitle = Form("Endcap HF noise gain x%d", gainValues[gainId]);
+      hHFNoiseEE[gainId] = new TH1F(Form("HFNoiseEE_%d", gainId),
+				  hTitle.c_str(), 100, 0., noiseup[gainId]);
+
+      hTitle = Form("Endcap Pedestal for weights hits gain x%d", gainValues[gainId]);
+      hPedestalHitEE[gainId] = new TH1F(Form("PedestalHitEE_%d", gainId),
+				      hTitle.c_str(),  100, -2., 2.);
+      hTitle = Form("Endcap Tot Noise forweights hits gain x%d", gainValues[gainId]);
+      hTotNoiseHitEE[gainId] = new TH1F(Form("TotNoiseHitEE_%d", gainId),
+				      hTitle.c_str(), 100, 0., hitup[gainId]);
+
+      hEENoise[gainId] = new TH2F*[2];
+      hEENoiseLF[gainId] = new TH2F*[2];
+      hEENoiseHF[gainId] = new TH2F*[2];
+      for (int Zside = 0; Zside <2; Zside++) {
+	int izz = Zside;
+	if(Zside == 0) izz = -1;
+	hEENoise[gainId][Zside] = new TH2F(Form("EENoise_%i_%i", gainId, Zside),
+				  Form("Endcap Total noise gain %i side %i", gainValues[gainId], izz ),100, 1.,101., 100, 1., 101);
+	hEENoiseLF[gainId][Zside] = new TH2F(Form("EENoiseLF_%i_%i", gainId, Zside),
+				  Form("Endcap Low Frequency noise gain %i side %i", gainValues[gainId], izz ),100, 1., 101.,100, 1., 101);
+	hEENoiseHF[gainId][Zside] = new TH2F(Form("EENoiseHF_%i_%i", gainId, Zside),
+				  Form("Endcap High Frequency noise gain %i side %i", gainValues[gainId], izz ),100, 1., 101.,100, 1., 101);
+      }
+
+    }
+
+    cout << " kEEChannels " << kEEChannels << endl;
+    Int_t NoentryEE[2][316][3];
+    int NoentryDCCEE[2][9][3];
+    int NoentryChannelEE[2][316][3][25];
+    for (int gainId = 0; gainId < kGains; gainId++)
+      for (int Zside = 0; Zside <2; Zside++) {
+	for (int iSC = 0; iSC < 316; iSC++)
+	  NoentryEE[Zside][iSC][gainId] = 0;
+	for (int DCC = 0; DCC <9; DCC++)
+	  NoentryDCCEE[Zside][DCC][gainId] = 0;
+      }
+    /*
+    Int_t NoentryHitEE[2][316][3];
+    int NoentryDCCEEHit[2][9][3];
+    int NoentryChannelEEHit[2][316][3][25];
+    for (int gainId = 0; gainId < kGains; gainId++)
+      for (int Zside = 0; Zside <2; Zside++) {
+	for (int iSC = 0; iSC < 316; iSC++)
+	  NoentryHitEE[Zside][iSC][gainId] = 0;
+	for (int DCC = 0; DCC <9; DCC++)
+	  NoentryDCCEEHit[Zside][DCC][gainId] = 0;
+      }
+    */
+
+    int GoodEEChannels = 0;
+    Double_t corrMean[10][10];
+    Double_t corrRSM[10][10];
+    for(int is1 = 0; is1 < 10; is1++) {
+      for(int is2 = 0; is2 <= is1; is2++) {
+	corrMean[is1][is2] = 0;
+	corrRSM[is1][is2] = 0;
+      }
+    }
+
+    for (int iChannel = 0; iChannel < kEEChannels; iChannel++) {
+      EEDetId myEEDetId = EEDetId::unhashIndex(iChannel);
+      int iz = myEEDetId.zside();
+      int ix = myEEDetId.ix();
+      int iy = myEEDetId.iy();
+      int iSC = myEEDetId.isc();
+      int izz = iz;
+      if(iz == -1) izz = 0;
+      EcalElectronicsId elecId = ecalElectronicsMap_->getElectronicsId(myEEDetId);
+      int DCCid = elecId.dccId() - 1;  // 0-8
+      if(DCCid > 44) {
+	if(iz == -1) cout << " Endcap strange EE+ for DCCId " << DCCid + 1 << endl;
+	DCCid -= 45;
+      }
+      else if(iz == 1) cout << " Endcap strange EE- for DCCId " << DCCid + 1 << endl;
+      for (int gainId = 0; gainId < 3; gainId++) { 
+	int arrayId = gainId*kEEChannels + iChannel;
+
+	// Standard way...	
+	if (nEntriesStandardEE_[arrayId]) {
+	  NoentryDCCEE[izz][DCCid][gainId]++;
+	  double xmean = pedestalStandardEE_[arrayId] / double(nEntriesStandardEE_[arrayId]);
+	  double Totmean = xmean;
+	  double sigmean = pedestal2StandardEE_[arrayId] / double(nEntriesStandardEE_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  double Totsig = sqrt(Totsig2);
+	  if (Totsig == 0. || Totsig > noisecutEE[gainId])
+	    cout << " Channel " <<  iChannel
+		 << " gain x" <<  gainValues[gainId]
+		 << " Tot noise " << Totsig
+		 << endl;
+	  if(gainId == 0) fPedestal << std::setw(5) << iChannel << " "
+				    << std::setw(3) << iz << " "
+				    << std::setw(3) << ix << " "
+				    << std::setw(3) << iy << " ";
+	  fPedestal << std::setw(7) << std::setprecision(5) << xmean << " " 
+		    << std::setw(7) << std::setprecision(4) << Totsig << " ";
+	  hPedestalEE[gainId]->Fill(Totmean);
+	  hTotNoiseEE[gainId]->Fill(Totsig);
+	  hEENoise[gainId][izz]->Fill(ix,iy,Totsig);
+	  // Low Frequency noise
+	  xmean = avgSamplesEE_[arrayId] / double(nEntriesAvgEE_[arrayId]);
+	  sigmean = avgSample2EE_[arrayId] / double(nEntriesAvgEE_[arrayId]);
+	  sigmean = sqrt(sigmean - xmean * xmean);
+	  double LFsig = sigmean;
+	  hLFNoiseEE[gainId]->Fill(LFsig);
+	  hEENoiseLF[gainId][izz]->Fill(ix,iy,LFsig);
+	  fPedestal << std::setw(7) << std::setprecision(4) << LFsig << " ";
+	  // High Frequency noise
+	  xmean = pedavgEE_[arrayId]/double(nEntriesStandardEE_[arrayId]);
+	  sigmean =  pedavg2EE_[arrayId]/double(nEntriesStandardEE_[arrayId]);
+	  double HFsig = sqrt(sigmean - xmean * xmean);
+	  hHFNoiseEE[gainId]->Fill(HFsig);
+	  hEENoiseHF[gainId][izz]->Fill(ix,iy,HFsig);
+	  fPedestal << std::setw(7) << std::setprecision(4) << HFsig;
+	}  // nEntriesStandard
+	else {
+	  int index = NoentryEE[izz][iSC - 1][gainId];
+	  NoentryChannelEE[izz][iSC - 1][gainId][index] = iChannel;
+	  if(iSC > 316)
+	    cout << " EE Channel " <<  iChannel << " Super Crystal " << iSC << endl;
+	  NoentryEE[izz][iSC - 1][gainId]++;   // iSC runs from 1 to 316
+	  if(gainId == 0) fPedestal << std::setw(5) << iChannel << " "
+				    << std::setw(3) << iz << " "
+				    << std::setw(3) << ix << " "
+				    << std::setw(3) << iy << " ";
+	  fPedestal << "   -999    -999    -999    -999";
+	}
+
+	//  Now uncalib hits
+	if (nEntriesHitEE_[arrayId]) {
+	  double xmean = pedestalHit_[arrayId] / double(nEntriesHit_[arrayId]);
+	  double Totmean = xmean;
+	  double sigmean = pedestal2HitEE_[arrayId] / double(nEntriesHitEE_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  double Totsig = sqrt(Totsig2);
+	  hPedestalHitEE[gainId]->Fill(Totmean);
+	  hTotNoiseHitEE[gainId]->Fill(Totsig);
+	  //	  int index = NoentryHitEE[izz][iSC - 1][gainId];
+	  //	  NoentryChannelEEHit[izz][iSC - 1][gainId][index] = iChannel;
+	  //	  if(iSC > 316)
+	  //	    cout << " EE Channel " <<  iChannel << " Super Crystal " << iSC << endl;
+	  //	  NoentryHitEE[izz][iSC - 1][gainId]++;   // iSC runs from 1 to 316
+	  //	  EEDetId myEEDetId = EEDetId::unhashIndex(iChannel);
+	}  // nEntriesHit not 0
+	//	else
+	  //	  NoentryDCCEEHit[izz][DCCid][gainId]++;
+      }  // loop over gain
+      fPedestal << std::endl;
+      for (int gainId = 2; gainId > -1; gainId--) { 
+	int arrayId = gainId*kEEChannels + iChannel;
+	if (nEntriesStandardEE_[arrayId]) {
+	  if(gainId == 2) {
+	    if(iz == -1) fDQM << "55555  2010";
+	    else fDQM << "55555  2012";
+	    if(ix < 10) fDQM << "00" << ix;
+	    else if(ix < 100) fDQM << "0" << ix;
+	    else fDQM  << ix;
+	    if(iy < 10) fDQM << "00" << iy;
+	    else if(iy < 100) fDQM << "0" << iy;
+	    else fDQM  << iy;
+	  }
+	  double xmean = pedestalStandardEE_[arrayId] / double(nEntriesStandardEE_[arrayId]);
+	  double sigmean = pedestal2StandardEE_[arrayId] / double(nEntriesStandardEE_[arrayId]);
+	  double Totsig2 = sigmean - xmean * xmean;
+	  double Totsig = sqrt(Totsig2);
+	  fDQM << std::setw(7) << std::setprecision(5) << xmean << " " 
+	       << std::setw(7) << std::setprecision(4) << Totsig << " ";
+	  if(gainId == 0) fDQM << " 0" << std::endl;
+	  GoodEEChannels++;
+	  (*vCovMatEE)[iChannel]->ComputeEstimators();
+	  if(iChannel%2000 == 0) {
+	    hCorrEE[iChannel] = new TH2F(Form("CorrEE_%d", iChannel),
+				     Form("EE Time correlation xl %d", iChannel),
+				     10 , 0., 10. , 10, 0., 10.);
+	  } // choosen channel
+	  for(int is1 = 0; is1 < 10; is1++) {
+	    for(int is2 = 0; is2 <= is1; is2++) {
+	      float corr = (*vCovMatEE)[iChannel]->getCorrelation(is1, is2);
+	      corrMean[is1][is2] += corr;
+	      corrRSM[is1][is2] += corr * corr;
+	      if(iChannel%2000 == 0) {
+		hCorrEE[iChannel]->Fill(is1, is2, corr);
+		if(is2 !=is1) hCorrEE[iChannel]->Fill(is2, is1, corr);
+	      }
+	    }
+	  }  // end loop over samples
+	  if(iChannel%2000 == 0) hCorrEE[iChannel]->Write();
+	} // only if read out
+      }  // loop over gain
+    }   // loop over channels
+
+    // print missing channel, SC, slice
+    for (int gainId = 0; gainId < 3; gainId++) { 
+      cout << " Results for gain " << gainValues[gainId] << endl;
+      for (int Zside = 0; Zside <2; Zside++) {
+	string  side = "-";
+	int Fedid = 601;
+	if(Zside == 1) {
+	  side = "+";
+	  Fedid = 646;
+	}
+	for (int DCC = 0; DCC < 9; DCC++)
+	  if(NoentryDCCEE[Zside][DCC][gainId] == 0) {
+	    string sliceName = fedMap_->getSliceFromFed(Fedid + DCC);
+  	    cout << " No entry for " << sliceName << endl;
+	  }
+	for (int iSC = 0; iSC < 316; iSC++) {
+	  // check if it is not part of am empty slice (already printed)
+	  if(NoentryEE[Zside][iSC][gainId] > 0) {
+	    int ich = NoentryChannelEE[Zside][iSC][gainId][0];
+	    EEDetId myEEDetId = EEDetId::unhashIndex(ich);
+	    EcalElectronicsId elecId = ecalElectronicsMap_->getElectronicsId(myEEDetId);
+	    int DCCid = elecId.dccId() - 1;  // 0-8
+	    if(DCCid > 44)  DCCid -= 45;
+	    if(NoentryDCCEE[Zside][DCCid][gainId] != 0) { // not yet printed
+	      if(NoentryEE[Zside][iSC][gainId] == 25)
+		cout << " No entry for " << NoentryEE[Zside][iSC][gainId] 
+		     << " channels in SC " << iSC + 1 // iSC runs from 1 to 316
+		     << " Z side " << Zside
+		     << " gain " <<  gainValues[gainId]
+		     << endl;
+	      else if(NoentryEE[Zside][iSC][gainId] > 0) {
+		int index = NoentryEE[Zside][iSC][gainId];
+		cout << " No entry for " << index
+		     << " channels in SC " << iSC + 1
+		     << " Z side " << Zside
+		     << " gain " <<  gainValues[gainId] << " channels";
+		for (int ich = 0; ich < index; ich++)
+		  cout << " " << NoentryChannelEE[Zside][iSC][gainId][ich];
+		cout << endl;
+	      }
+	    } // NoentryDCCEE > 0
+	  } // NoentryEE > 0
+	} // loop on SC
+      }  // loop on Zside
+    }  // loop on gain
+    /*
+    // print missing hit channel, SC, slice
+    for (int gainId = 0; gainId < 3; gainId++) { 
+      for (int Zside = 0; Zside <2; Zside++) {
+	string  side = "-";
+	int Fedid = 601;
+	if(Zside == 1) {
+	  side = "+";
+	  Fedid = 646;
+	}
+	for (int DCC = 0; DCC < 9; DCC++)
+	  if(NoentryDCCEEHit[Zside][DCC][gainId] == 0) {
+	    string sliceName = fedMap_->getSliceFromFed(Fedid + DCC);
+	    cout << " No entry for " << sliceName << endl;
+	  }
+	for (int iSC = 0; iSC < 316; iSC++) {
+	  // check if it is not part of am empty slice (already printed)
+	  if(NoentryHitEE[Zside][iSC][gainId] > 0) {
+	    int ich = NoentryChannelEEHit[Zside][iSC][gainId][0];
+	    EEDetId myEEDetId = EEDetId::unhashIndex(ich);
+	    EcalElectronicsId elecId = ecalElectronicsMap_->getElectronicsId(myEEDetId);
+	    int DCCid = elecId.dccId() - 1;  // 0-8
+	    if(DCCid > 44)  DCCid -= 45;
+	    if(NoentryDCCEEHit[Zside][DCCid][gainId] != 0) { // not yet printed
+	      if(NoentryHitEE[Zside][iSC][gainId] == 25)
+		cout << " No entry for " << NoentryHitEE[Zside][iSC]
+		     << " channels in SC " << iSC + 1 // iSC runs from 1 to 316
+		     << " Z side " << Zside
+		     << endl;
+	      else if(NoentryHitEE[Zside][iSC][gainId] > 0) {
+		int index = NoentryHitEE[Zside][iSC][gainId];
+		cout << " No entry for " << index
+		     << " channels in SC " << iSC + 1
+		     << " Z side " << Zside
+		     <<  " channels";
+		for (int ich = 0; ich < index; ich++)
+		  cout << " " << NoentryChannelEEHit[Zside][iSC][gainId][ich];
+		cout << endl;
+	      }
+	    } // NoentryDCCEEHit > 0
+	  } // NoentryHitEE > 0
+	} // loop on SC
+      }  // loop on Zside
+    }  // loop on gain
+    cout << "\n\n" << endl;
+    */
+    for (int gainId = 0; gainId < 3; gainId++) {
+      if(hPedestalEE[gainId]->GetEntries() > 0.) { // save only when filled!
+	hPedestalEE[gainId]->Write();
+	hTotNoiseEE[gainId]->Write();
+	hLFNoiseEE[gainId]->Write();
+	hHFNoiseEE[gainId]->Write();
+	for (int Zside = 0; Zside <2; Zside++) {
+	  if(hEENoise[gainId][Zside]->GetEntries() > 0.) {
+	    hEENoise[gainId][Zside]->Write();
+	    hEENoiseLF[gainId][Zside]->Write();
+	    hEENoiseHF[gainId][Zside]->Write();
+	  }
+	}
+	hPedestalHitEE[gainId]->Write();
+	hTotNoiseHitEE[gainId]->Write();
+      }
+    }
+    TH2F* hCorrMeanEE = new TH2F("CorrMeanEE","EE Time mean correlation",
+				 10 , 0., 10. , 10, 0., 10.);
+    TH2F* hCorrRMSEE = new TH2F("CorrRMSEE","EE Time RMS correlation",
+				10 , 0., 10. , 10, 0., 10.);
+    for(int is1 = 0; is1 < 10; is1++) {
+      for(int is2 = 0; is2 <= is1; is2++) {
+	double Mean = corrMean[is1][is2] / double(GoodEEChannels);
+	hCorrMeanEE->Fill(is1, is2, Mean);
+	if(is2 !=is1) hCorrMeanEE->Fill(is2, is1, Mean);
+	double RMS = corrRSM[is1][is2] / double(GoodEEChannels);
+	RMS = RMS - Mean * Mean;
+	RMS = sqrt(RMS);
+	hCorrRMSEE->Fill(is1, is2, RMS);
+	if(is2 !=is1) hCorrRMSEE->Fill(is2, is1, RMS);
+      }
+    }
+    hCorrMeanEE->Write();
+    hCorrRMSEE->Write();
+  }  //  endcap data present
+
+  fPedestal.close();
+  fDQM.close();
+  f.Close();
+  cout << "Exiting endJob" << endl;
+}//endJob
+
+//
+// member functions
+//
+
+//========================================================================
+void
+EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup ) {
+//========================================================================
+  
+  float cutStrange[3] = {9.2, 5.2, 2.8};
+  int ievt = iEvent.id().event();
+
+  if(cnt_evt_ == 0) {
+    if(ECALType_ == "EB" || ECALType_ == "EA") {
+      cout << " Barrel data : nb channels " << kEBChannels << endl;
+      //      kEventGains = 150;
+      kEventGains = 500;
+   }
+    else if(ECALType_ == "EE" || ECALType_ == "EA") {
+      cout << " End cap data : nb channels " << kEEChannels << endl;
+      kEventGains = 200;
+    }
+    else {
+      cout << " strange ECALtype : " << ECALType_ << " abort " << endl;
+      return;
+    }
+    int NbOfmaskedChannels =  maskedChannels_.size();
+    cout << " Nb masked EB channels " << NbOfmaskedChannels << endl;
+    for (vector<int>::iterator iter = maskedChannels_.begin(); iter != maskedChannels_.end(); ++iter)
+      cout<< " : masked channel " << *(iter) << endl;
+    NbOfmaskedChannels =  maskedEEChannels_.size();
+    cout << " Nb masked EE channels " << NbOfmaskedChannels << endl;
+    for (vector<int>::iterator iter = maskedEEChannels_.begin(); iter != maskedEEChannels_.end(); ++iter)
+      cout<< " : masked channel " << *(iter) << endl;
+  }
+  cnt_evt_++;
+  //  int expectedGain = 3 - cnt_evt_/kEventGains;
+  int expectedGain = 0;
+  if(runType_ == "Pedes") {  
+    //   expectedGain = 4 - (cnt_evt_%3);
+    //   if(expectedGain == 4) expectedGain = 1;
+    expectedGain = 3;
+    if(cnt_evt_ > 300) expectedGain = 2;
+    if(cnt_evt_ > 600) expectedGain = 1;
+  }
+  else if(runType_ == "Ped_6") {
+    expectedGain = 2;
+  }
+  else if(runType_ == "Other" || runType_ == "Calib") {  
+    expectedGain = 1;
+  }
+  else {
+    cout << " strange runType : " << runType_ << " abort " << endl;
+    return;
+  }
+
+  //  cout << "Running on event =" << cnt_evt_ << endl;
+  if(cnt_evt_ < startevent_) return;
+  //else cout << "starting to analyze" << endl;
+  if(cnt_evt_%100 ==1) cout << "Running on event = " << ievt << " at " << cnt_evt_ << endl;
+
+  //GET THE RECONSTRUCTED TDC INFO
+  /*
+  Handle<EcalTBTDCRecInfo> pTDC;
+  const EcalTBTDCRecInfo* recTDC=0;
+  try {
+    iEvent.getByLabel( tdcRecInfoProducer_, tdcRecInfoCollection_, pTDC);
+    recTDC = pTDC.product(); // get a ptr to the product
+  } catch ( std::exception& ex ) {
+    std::cerr << "Error! can't get the product " << tdcRecInfoCollection_.c_str() << endl;
+  }
+  
+  //GET THE RAW TDC INFO
+  Handle<EcalTBTDCRawInfo> pTDCRaw;
+  const EcalTBTDCRawInfo*  TDCRaw=0;
+  try {
+    iEvent.getByLabel( "ecalTBunpack", "", pTDCRaw);
+    TDCRaw = pTDCRaw.product(); // get a ptr to the product
+  } catch ( std::exception& ex ) {
+    std::cerr << "Error! can't get the product " << " EcalTBTDCRawInfo " << endl;
+  }
+  //cout << (*TDCRaw)[0].tdcValue() << endl;
+  h_tdc->Fill((*TDCRaw)[0].tdcValue());
+
+  //GET THE HEADER
+  Handle<EcalTBEventHeader> pEventHeader;
+  const EcalTBEventHeader* evtHeader=0;
+  try {
+    iEvent.getByLabel( eventHeaderProducer_ , pEventHeader );
+    evtHeader = pEventHeader.product(); // get a ptr to the product
+  } catch ( std::exception& ex ) {
+    if(cnt_evt_%50 ==1) 
+      std::cerr << "Error! can't get the Header product " << eventHeaderProducer_.c_str() << endl;
+  }//header
+
+  //CHECKS
+  //==================================================================
+   //cout << "checking hits" << endl;
+  if (!hits) {
+    cout << "THERE IS NO HITS" << endl;
+    return;
+  }//cheking hits
+  
+  if (hits->size() == 0){
+    cout << "THERE ARE NO RECONSTRUCTED RECHITS" << endl;
+    //    return;
+  }//checking hit size
+
+  if (!recTDC){
+    cout << "THERE IS NO TDC" << endl;
+    return;
+  }//checking tdc
+  h_tdcr->Fill(recTDC->offset());
+  cout << " TDC " << recTDC->offset() << endl;
+  if (!evtHeader) {
+    if(cnt_evt_%50 ==1) cout << "THERE IS NO HEADER" << endl;
+    //    return;
+  }//checking header
+  //=============================================================
+  */
+
+  // for calib event check the trigger
+  short half = -1;
+  if(runType_ == "Calib") {  
+    Handle<EcalRawDataCollection> DCCHeaders;
+    try{ 
+      iEvent.getByLabel(edm::InputTag("ecalEBunpacker"), DCCHeaders);
+    } catch ( std::exception& ex ) {
+      std::cerr << "Error! can't get the product for EcalRawDataCollection" << std::endl;
+    }
+
+    //    std::map <int,int> DACvalues;
+    int DCCnb = 0;
+    for ( EcalRawDataCollection::const_iterator headerItr= DCCHeaders->begin();headerItr != DCCHeaders->end(); 
+	  ++headerItr ) {
+      //      EcalDCCHeaderBlock::EcalDCCEventSettings settings = headerItr->getEventSettings();
+      DCCnb++;
+      //Here is where I look for the laser information
+      int runtype = headerItr->getRunType();
+
+      if (runtype != EcalDCCHeaderBlock::LASER_STD &&
+	  runtype != EcalDCCHeaderBlock::LASER_POWER_SCAN && 
+	  runtype != EcalDCCHeaderBlock::LASER_DELAY_SCAN && 
+	  runtype != EcalDCCHeaderBlock::LASER_GAP) {
+	cout << " LV1 event " << headerItr->getLV1() << " DCC iterator " << DCCnb 
+	     << " runtype " << runtype << " leaving " << endl;
+	return; // only laser event
+      }
+      half = headerItr->getRtHalf();
+      cout << " LV1 event " << headerItr->getLV1() << " DCC iterator " << DCCnb 
+	   << " laser event  half number is " << half << " DCCid " <<headerItr->id() << endl;
+    }
+  }
+  else {
+    Handle<EcalRawDataCollection> DCCHeaders;
+    try{ 
+      iEvent.getByLabel(edm::InputTag("ecalEBunpacker"), DCCHeaders);
+    } catch ( std::exception& ex ) {
+      std::cerr << "Error! can't get the product for EcalEBunpacker" << std::endl;
+    }
+
+    int DCCnb = 0;
+    for ( EcalRawDataCollection::const_iterator headerItr= DCCHeaders->begin();headerItr != DCCHeaders->end(); 
+	  ++headerItr ) {
+      DCCnb++;
+      int runtype = headerItr->getRunType();
+      if (runtype != EcalDCCHeaderBlock::PEDESTAL_STD)
+	cout << " DCC " << DCCnb << " runtype " << runtype << endl;
+    }
+  }
+
+  //GET THE DIGIS
+  int nebd = 0;
+  int need = 0;
+  const EBDigiCollection* EBdigis = 0;
+  const EEDigiCollection* EEdigis = 0;
+  Handle< EBDigiCollection > pEBdigis;
+  try {
+    iEvent.getByLabel( digiProducer_, EBdigiCollection_, pEBdigis);
+    EBdigis = pEBdigis.product(); // get a ptr to the product
+    nebd = EBdigis->size();
+  } catch ( std::exception& ex ) {
+    cerr << "Error! can't get the product " << EBdigiCollection_ << endl;
+    if(ECALType_ == "EB" || ECALType_ == "EA") 
+      cout <<" EcalPedestal " << EBdigiCollection_ << " not available" << endl;
+  } //getting barrel digis
+
+    // endcaps
+  Handle< EEDigiCollection > pEEdigis;
+  try {
+    iEvent.getByLabel( digiProducer_, EEdigiCollection_, pEEdigis);
+    EEdigis = pEEdigis.product(); // get a ptr to the product
+    need = EEdigis->size();
+  } catch ( std::exception& ex ) {
+    cerr << "Error! can't get the product " << EEdigiCollection_ << endl;
+    if(ECALType_ == "EE" || ECALType_ == "EA") 
+      cout <<" EcalPedestal " << EEdigiCollection_ << " not available" << endl;
+  } //getting endcap digis
+
+  if(ECALType_ == "EB" || ECALType_ == "EA") {    // barrel
+
+    // Loop over Ecal barrel digis
+    int CrystalinSM[36];
+    for(int SM = 0; SM < 36; SM++) CrystalinSM[SM] = 0;
+    int SM = -999;
+    if(nebd != 0) {
+      nevent[0]++;
+      int NBSinCh = 0;
+      int wronggainId = 0;
+      // Zero Suppression simulation
+      double ZSWeights[6] = {-1.0, 0.016488, 0.244847, 0.293487, 0.253916, 0.191261};
+      for (EBDigiCollection::const_iterator digiItr = EBdigis->begin(); digiItr != EBdigis->end(); ++digiItr) {
+	// Get (ieta, iphi) coordinates
+	//      pair<int, int> channelPos(EBDetId((*digiItr).id()).ieta(), 
+	//				EBDetId((*digiItr).id()).iphi());
+	int ieta = EBDetId((*digiItr).id()).ieta();
+	int iphi = EBDetId((*digiItr).id()).iphi();
+	//      int iCh = EBDetId((*digiItr).id()).ic();      // here iCh runs from 0 to 1700
+	SM = EBDetId((*digiItr).id()).ism();      // Get SM number (from 1 to 36)
+	int iChannel = EBDetId((*digiItr).id()).hashedIndex();      // here iChannel runs from 0 to 61200
+	int ietaSM = EBDetId((*digiItr).id()).ietaSM();  // 1-85
+	int iphiSM = EBDetId((*digiItr).id()).iphiSM();  // 1-20
+
+	if(runType_ == "Calib") {
+	  if(ietaSM > 5 && iphiSM < 11) {
+	    if(half == 1) continue;
+	  }
+	  else {
+	    if(half == 0) continue;
+	  }
+	  if(cnt_evt_ == 1) 
+	    cout << " Calib event half " << half << " Channel " << iChannel 
+		 << " eta = " << ieta << " phi = " << iphi
+		 << endl;
+	}
+	CrystalinSM[SM - 1]++;
+	/*
+	  if(ieta < etamin) etamin = ieta;
+	  if(ieta > etamax) etamax = ieta;
+	  if(iphi < phimin) phimin = iphi;
+	  if(iphi > phimax) phimax = iphi;
+	  if(iChannel < Channelmin) Channelmin = iChannel;
+	  if(iChannel > Channelmax) Channelmax = iChannel;
+	  if(cnt_evt_ == 1 && SM == 1) 
+	  cout << " eta " << ieta << " phi " << iphi << " Channel " << iChannel 
+	  << " eta min " << etamin << " max " << etamax
+	  << " phi min " << phimin << " max " << phimax
+	  << " Channel min " << Channelmin << " max " << Channelmax
+	  << endl;
+	*/
+
+	EBDataFrame df( *digiItr );
+	int gainId = df.sample(0).gainId();
+	if (gainId < kFirstGainId || gainId >= kFirstGainId + kGains) {
+	  cout << "EcalPedestal::analyze: Warning: gainId = " << gainId
+	       << " channel " << iChannel
+	    //	     << " at eta = " << channelPos.first
+	    //	     << " and phi = " << channelPos.second
+	       << " eta = " << ieta
+	       << " phi = " << iphi
+	       << " for event " << cnt_evt_ << endl;
+	  continue;
+	}
+	// gain check on the first read channel whatever it is
+	if(digiItr == EBdigis->begin()) {
+	  expectedGain = gainId;
+	  if(gainId == 1) nevent[1]++;  // gain 12
+	  if(gainId == 2) nevent[2]++;  // gain 6
+	  if(gainId == 3) nevent[3]++;  // gain 1
+	}
+	if (gainId != expectedGain) {
+	  wronggainId++;
+	  if (wronggainId == 1)  // print only once
+	    cout << "EcalPedestal::analyze: Warning: gainId = " << gainId
+		 << " while " << expectedGain << " was expected " 
+		 << " channel " << iChannel
+		 << " eta = " << ieta
+		 << " phi = " << iphi
+		 << " for event " << ievt << " at " << cnt_evt_ << endl;
+	  continue;
+	}
+	//no less than 10 samples readout
+	int nSample = digiItr->size();
+	if (nSample != 10)   {
+	  cout << "EcalPedestal::analyze: Warning: N samples " << nSample
+	       << " channel " << iChannel
+	    //	     << " at eta = " << channelPos.first
+	    //	     << " and phi = " << channelPos.second
+	       << " eta = " << ieta
+	       << " phi = " << iphi
+	       << " for event " << cnt_evt_ << endl;
+	  continue;
+	}
+	hEBEntry[gainId - 1]->Fill(iphi, ieta, 1.);
+	float adcZS = 0.;  // check Zero Suppression algorithm
+	bool ZSreject = false;
+	for (int iSample = 2; iSample < 8; ++iSample) 
+	  adcZS +=  float(df.sample(iSample).adc()) * ZSWeights[iSample - 2];
+	if(adcZS < 1.75) ZSreject = true;
+
+	double amplitude_5 = 0;
+	double amplitude_3p5 = 0;
+	double amplitude_3g1 = 0;
+	double amplitude_3g2 = 0;
+	double amplitude_3g3 = 0;
+	double amplitude_3g4 = 0;
+	double amplitude_3g5 = 0;
+	double amplitude_3g6 = 0;
+	double amplitude_3g7 = 0;
+	double amplitude_2p1 = 0;
+	double amplitude_3p1 = 0;
+	double amplitude_4p1 = 0;
+	double amplitude_5p1 = 0;
+	double amplitude_6p1 = 0;
+	double amplitude_7p1 = 0;
+	double amplitude_8p1 = 0;
+	double amplitude_9p1 = 0;
+	int arrayId = (expectedGain - kFirstGainId) * kEBChannels + iChannel; 
+	Double_t adc[10];
+	float pedestalevent = 0.;
+	double pedestalevent2 = 0.;
+	Double_t adcmin = 5000.;
+	Double_t adcmax = -.1;
+	Double_t adcmean = 0.;
+	for (int iSample = 0; iSample < nSample; ++iSample) {
+	  int gainSample = df.sample(iSample).gainId();
+	  if(gainSample != gainId) {
+	    cout << "EcalPedestal::analyze: Warning: gain change for sample " << iSample
+		 << " gain " << gainSample
+		 << " channel " << iChannel
+		 << " eta = " << ieta
+		 << " phi = " << iphi
+		 << " for event " << cnt_evt_ << endl;
+	  }
+	  adc[iSample] = float(df.sample(iSample).adc());
+	  pedestalevent += adc[iSample];
+	  pedestalevent2 += adc[iSample] * adc[iSample];
+	  amplitude_5 += Weights_5[iSample] * (adc[iSample] - PedestalRead_[arrayId]);
+	  amplitude_3p5 += Weights_3p5[iSample] * adc[iSample];
+	  amplitude_3g1 += Weights_3g1[iSample] * adc[iSample];
+	  amplitude_3g2 += Weights_3g2[iSample] * adc[iSample];
+	  amplitude_3g3 += Weights_3g3[iSample] * adc[iSample];
+	  amplitude_3g4 += Weights_3g4[iSample] * adc[iSample];
+	  amplitude_3g5 += Weights_3g5[iSample] * adc[iSample];
+	  amplitude_3g6 += Weights_3g6[iSample] * adc[iSample];
+	  amplitude_3g7 += Weights_3g7[iSample] * adc[iSample];
+	  amplitude_2p1 += Weights_2p1[iSample] * adc[iSample];
+	  amplitude_3p1 += Weights_3p1[iSample] * adc[iSample];
+	  amplitude_4p1 += Weights_4p1[iSample] * adc[iSample];
+	  amplitude_5p1 += Weights_5p1[iSample] * adc[iSample];
+	  amplitude_6p1 += Weights_6p1[iSample] * adc[iSample];
+	  amplitude_7p1 += Weights_7p1[iSample] * adc[iSample];
+	  amplitude_8p1 += Weights_8p1[iSample] * adc[iSample];
+	  amplitude_9p1 += Weights_9p1[iSample] * adc[iSample];
+	  //	if(cnt_evt_ > 400 && iChannel == 247) {
+	  if(gainId == 1) (*vCovMatEB)[iChannel]->Fill(iSample,adc[iSample]);
+	  if(iChannel == 248) {
+	    //	  hPed248Evt->Fill((cnt_evt_ - 401)*10 + iSample,adc[iSample]);
+	    //	  hPed248Evt->Fill(cnt_evt_*10 + iSample,adc[iSample]);
+	    hPed248->Fill(adc[iSample]);
+	    hPed248sample->Fill(iSample,adc[iSample]);
+	    if(!ZSreject) hPed248sampleZS->Fill(iSample,adc[iSample]);
+	    //	    if(gainId == 1) {
+	    //	      (*vCovMatEB)[0]->Fill(iSample,adc[iSample]);
+	    //	      if(!ZSreject) (*vCovMatEB)[1]->Fill(iSample,adc[iSample]);
+	    //	    }
+	  }
+	  if(iChannel == 45784) {
+	    //	  hPed45784Evt->Fill(cnt_evt_*10 + iSample,adc[iSample]);
+	    hPed45784->Fill(adc[iSample]);
+	    hPed45784sample->Fill(iSample,adc[iSample]);
+	    if(!ZSreject) hPed45784sampleZS->Fill(iSample,adc[iSample]);
+	    //	    if(gainId == 1) {
+	    //	      (*vCovMat)[2]->Fill(iSample,adc[iSample]);
+	    //	      if(!ZSreject) (*vCovMat)[3]->Fill(iSample,adc[iSample]);
+	    //	    }
+	  }
+	  if(iChannel == 46845) {
+	    hPed46845sample->Fill(iSample,adc[iSample]);
+	    if(!ZSreject) hPed46845sampleZS->Fill(iSample,adc[iSample]);
+	    //	    if(gainId == 1) {
+	    //	      (*vCovMat)[4]->Fill(iSample,adc[iSample]);
+	    //	      if(!ZSreject) (*vCovMat)[5]->Fill(iSample,adc[iSample]);
+	    //	    }
+	  }
+	  if(adc[iSample] < adcmin) adcmin = adc[iSample];
+	  if(adc[iSample] > adcmax) adcmax = adc[iSample];
+	  adcmean += adc[iSample];
+	}  // sample
+	adcmean /= 10.;
+
+	if(patternNoise_) {
+	  vector<int>::iterator result;
+	  result = find(maskedChannels_.begin(), maskedChannels_.end(), iChannel);
+	  if (result == maskedChannels_.end()) {
+	    float diff = adcmax-adcmin;
+	    hMaxMin[gainId - 1]->Fill(diff);
+	    if ((gainId == 1 && diff > 8.) || (gainId == 2 && diff > 5.) || (gainId == 3 && diff > 3.)) {
+	      //	if ((gainId == 1 && diff > 5.) || (gainId == 2 && diff > 3.) || (gainId == 3 && diff > 2.)) {
+	      entriesLarge[arrayId] ++;
+	      TH1F* hSin = new TH1F("hSin_","", 10, 0., 10.);
+	      //	  Double_t xarray[10] = {0.,1.,2.,3.,4.,5.,6.,7.,8.,9.};
+	      //	  TGraph gSin(10, xarray, adc);
+	      TF1* func = new TF1("fitSin","[0]*sin([1]*x + [2])+[3]", 0, 10);
+	      /*
+		if(gainId == 1)
+		func->SetParLimits(0, 3., 100.);  // amplitude
+		else 
+		func->SetParLimits(0, 2.5, 100.);  // amplitude
+	      */
+	      func->SetParLimits(0, 3., 100.);  // amplitude
+	      func->SetParLimits(1, 1.0, 2.0);  // frequency
+	      func->SetParLimits(2, 0., 6.2832);  // phase
+	      func->SetParameters(5., 1.6, 0., adcmean);
+	      for(Int_t sample = 0; sample < 10; sample++)
+		hSin->Fill(sample,adc[sample]);
+	      hSin->Fit("fitSin","QM");
+	      //	  gSin.Fit("fitSin","QM");
+	      float chi2 = func->GetChisquare();
+	      hChi2[gainId - 1]->Fill(chi2);
+	      float freq = func->GetParameter(1);
+	      func->FixParameter(1, 1.681);  // fix frequency
+	      hSin->Fit("fitSin","QM");
+	      chi2 = func->GetChisquare();
+	      hChi2FF[gainId - 1]->Fill(chi2);
+	      if(chi2 < 0.1) {
+		NBSinCh++;
+		float amp = func->GetParameter(0);
+		float phase = func->GetParameter(2);
+		float ped = func->GetParameter(3);
+		//	    if(abs(ped - adcmean) > 0.5) cout << " Strange fit ped = " << ped
+		//	       << " ADC mean = " << adcmean << endl;
+		Double_t Freq = freq/0.15707963;  // 2*Pi*25 ns
+		hFreqMhz[gainId - 1]->Fill(Freq);
+		fLargeAmp << " gain " << gainValues[gainId - 1]
+			  << setw(6) << iChannel << setw(7) << ievt << " " << diff;
+		for (int iSample = 0; iSample < nSample; ++iSample) {
+		  fLargeAmp << " " << adc[iSample];
+		}
+		fLargeAmp << " chi2 " << chi2 << " freq " << Freq << " amp " << amp << " ped-mean " << ped - adcmean << endl;
+		//		      << " ped " << ped << " phase " << phase << " " << endl;
+		//	    fLargeAmp << endl;
+		hSinusAmp[gainId - 1]->Fill(iphi, ieta, 1.);
+		hAmp[gainId - 1]->Fill(amp);
+		hPhase[gainId - 1]->Fill(phase);
+		//	    vector<int>::iterator result;
+		//	    result = find(SinChannels.begin(), SinChannels.end(), iChannel);
+		//	    if (result == SinChannels.end()) {
+		//	      SinChannels.push_back(iChannel);
+		//	    }
+		phaseMean[arrayId] += phase;
+		freqMean[arrayId] += Freq;
+		freqMean2[arrayId] += Freq * Freq;
+		ampMean[arrayId] += amp;
+		entriesSin[arrayId] ++;
+	      }
+	      else hLargeAmp[gainId - 1]->Fill(iphi, ieta, 1.);
+	      delete hSin;
+	      delete func;
+	    }  // cut on diff
+	  }  // do not use masked channels
+	}  // patternNoise
+	/*  CRUZET3 2 problematic VFEs
+	    int iCh = EBDetId((*digiItr).id()).ic();      // here iCh runs from 0 to 1700
+	    if((SM == 19 && iCh > 1500 && iCh < 1506) || (SM == 2 && iCh > 1005 && iCh < 1011)) {
+	    cout << " channel " << iChannel << " SM " << SM << " ic " << iCh
+	    << " gain " << gainValues[gainId - 1] << " event " << ievt;
+	    for (int iSample = 0; iSample < nSample; ++iSample) {
+	    cout << " " << adc[iSample];
+	    }
+	    cout << endl;
+	    }
+	*/
+
+	float avg = pedestalevent / nSample;
+	if(readPedestals_) {
+	  if(avg - PedestalRead_[arrayId] > cutStrange[gainId - 1]) {
+	    cout << " Strange event " << cnt_evt_ << " channel " << iChannel
+	      //	       << " val " << avg - PedestalRead_[arrayId] << " cut " << cutStrange[gainId] << " avg " << avg
+		 << " expected " << PedestalRead_[arrayId] << " samples :";
+	    for (int iSample = 0; iSample < nSample; ++iSample) {
+	      cout << " " << adc[iSample];
+	    }
+	    cout << endl;
+	    // do not use this channel
+	    continue;
+	  }
+	}
+	nEntriesStandard_[arrayId] += 10;
+	pedestalStandard_[arrayId] += pedestalevent;
+	pedestal2Standard_[arrayId] += pedestalevent2;
+
+	avgSamples_[arrayId] += avg;
+	avgSample2_[arrayId] += avg * avg;
+	nEntriesAvg_[arrayId]++;
+	//      if(cnt_evt_ > 400 && iChannel == 247) {
+	if(gainId == 1) {
+	  if(iChannel == 248) {
+	    //	hPed248LFEvt->Fill(cnt_evt_ - 401,avg);
+	    //	hPed248LFEvt->Fill(cnt_evt_,avg);
+	    hPed248LF->Fill(avg);
+	  }
+	  if(iChannel == 45784) {
+	    //	hPed45784LFEvt->Fill(cnt_evt_,avg);
+	    hPed45784LF->Fill(avg);
+	  }
+	}
+
+	// Compute HF noise
+	for (int iSample = 0; iSample < nSample; ++iSample) {
+	  Double_t adcHF = adc[iSample] - avg;
+	  pedavg_[arrayId] += adcHF;
+	  pedavg2_[arrayId] += adcHF * adcHF;
+	  if(gainId == 1) {
+	    hPedsample->Fill(iSample,adcHF);
+	    if(iChannel == 248) hPed248HF->Fill(adcHF);
+	    if(iChannel == 45784) hPed45784HF->Fill(adcHF);
+	  }
+	} 
+
+	pedestal_3p5_[arrayId] += amplitude_3p5;
+	pedestal2_3p5_[arrayId] += amplitude_3p5 * amplitude_3p5;
+	//      if(iChannel == 0) cout << " 3+5 weights " << amplitude_3p5;
+
+	pedestal_2p1_[arrayId] += amplitude_2p1;
+	pedestal2_2p1_[arrayId] += amplitude_2p1 * amplitude_2p1;
+
+	pedestal_3p1_[arrayId] += amplitude_3p1;
+	pedestal2_3p1_[arrayId] += amplitude_3p1 * amplitude_3p1;
+	//      if(cnt_evt_ > 400 && iChannel == 247) {
+	if(gainId == 1) {
+	  if(iChannel == 248) {
+	    //	hPed248_3p1Evt->Fill(cnt_evt_ - 401,amplitude_3p1);
+	    //	hPed248_3p1Evt->Fill(cnt_evt_,amplitude_3p1);
+	    hPed248_3p1->Fill(amplitude_3p1);
+	    hPed248corr->Fill(avg,amplitude_3p1);
+	  }
+	}
+
+	pedestal_3g1_[arrayId] += amplitude_3g1;
+	pedestal2_3g1_[arrayId] += amplitude_3g1 * amplitude_3g1;
+	pedestal_3g2_[arrayId] += amplitude_3g2;
+	pedestal2_3g2_[arrayId] += amplitude_3g2 * amplitude_3g2;
+	pedestal_3g3_[arrayId] += amplitude_3g3;
+	pedestal2_3g3_[arrayId] += amplitude_3g3 * amplitude_3g3;
+	pedestal_3g4_[arrayId] += amplitude_3g4;
+	pedestal2_3g4_[arrayId] += amplitude_3g4 * amplitude_3g4;
+	pedestal_3g5_[arrayId] += amplitude_3g5;
+	pedestal2_3g5_[arrayId] += amplitude_3g5 * amplitude_3g5;
+	pedestal_3g6_[arrayId] += amplitude_3g6;
+	pedestal2_3g6_[arrayId] += amplitude_3g6 * amplitude_3g6;
+	pedestal_3g7_[arrayId] += amplitude_3g7;
+	pedestal2_3g7_[arrayId] += amplitude_3g7 * amplitude_3g7;
+	
+	pedestal_4p1_[arrayId] += amplitude_4p1;
+	pedestal2_4p1_[arrayId] += amplitude_4p1 * amplitude_4p1;
+
+	pedestal_5p1_[arrayId] += amplitude_5p1;
+	pedestal2_5p1_[arrayId] += amplitude_5p1 * amplitude_5p1;
+
+	pedestal_6p1_[arrayId] += amplitude_6p1;
+	pedestal2_6p1_[arrayId] += amplitude_6p1 * amplitude_6p1;
+
+	pedestal_7p1_[arrayId] += amplitude_7p1;
+	pedestal2_7p1_[arrayId] += amplitude_7p1 * amplitude_7p1;
+
+	pedestal_8p1_[arrayId] += amplitude_8p1;
+	pedestal2_8p1_[arrayId] += amplitude_8p1 * amplitude_8p1;
+
+	pedestal_9p1_[arrayId] += amplitude_9p1;
+	pedestal2_9p1_[arrayId] += amplitude_9p1 * amplitude_9p1;
+
+	nEntriesSingle_[arrayId]++;
+	pedestalSingle_[arrayId] += adc[6];
+	pedestal2Single_[arrayId] += adc[6] * adc[6];
+      }  // loop over digis
+      if (wronggainId > 0)  // print how many channels have wrong gain
+	cout << "Event = " << ievt << " at " << cnt_evt_ << " wrong gain on " << wronggainId
+	     << " channels" << endl;
+      /*
+      // print also results for the last SM !
+      if(cnt_evt_ == 1)
+      << " eta min " << etamin << " max " << etamax
+	   << " phi min " << phimin << " max " << phimax
+	   << " Channel min " << Channelmin << " max " << Channelmax
+	   << endl;
+      */
+      if(NBSinCh != 0) hEvent[expectedGain - 1]->Fill(NBSinCh);
+      for(int SM = 0; SM < 36; SM++) {
+	if(cnt_evt_ == 1)
+	  cout << " SM " << SM + 1 << " Number of read channels " << CrystalinSM[SM] << endl;
+	hEntries->Fill(SM,CrystalinSM[SM]);
+      }
+    }  //  Barrel digis present
+    else
+      cout << " No EB digi in event " << cnt_evt_ << endl;
+  }
+
+  // Loop over Ecal endcap digis
+  if(ECALType_ == "EE" || ECALType_ == "EA") {    // endcap
+    if(need != 0) {
+      nevent[5]++;
+      for (EEDigiCollection::const_iterator digiItr = EEdigis->begin(); digiItr != EEdigis->end(); ++digiItr) {
+	int iChannel = EEDetId((*digiItr).id()).hashedIndex();    // here iChannel runs from 0 to 14647
+	if(iChannel >= kEEChannels) {
+	  cout << " ****** Error ****** EE channel " << iChannel << endl;
+	  continue;
+	}
+	int iz = EEDetId((*digiItr).id()).zside();
+	int ix = EEDetId((*digiItr).id()).ix();
+	int iy = EEDetId((*digiItr).id()).iy();
+	EEDataFrame df( *digiItr );
+	int gainId = df.sample(0).gainId();
+	if (gainId < kFirstGainId || gainId >= kFirstGainId + kGains) {
+	  cout << "EE crystal "<< iChannel  << " side " << iz << " x " << ix << " y " << iy
+	       << " gain " << gainId  << " for event " << cnt_evt_ << endl;
+	  continue;
+	}
+	if(digiItr == EEdigis->begin()) {      // gain check on the first read channel whatever it is
+	  expectedGain = gainId;
+	  if(gainId == 1) nevent[6]++;  // gain 12
+	  if(gainId == 2) nevent[7]++;  // gain 6
+	  if(gainId == 3) nevent[8]++;  // gain 1
+	}
+	if (gainId != expectedGain) {
+	  cout << "EcalPedestal::analyze: Warning: gainId = " << gainId
+	       << " while " << expectedGain << " was expected " 
+	       << " channel " << iChannel
+	       << " at X = " << ix << " and Y = " << iy
+	       << " for event " << cnt_evt_ << endl;
+	  continue;
+	}
+	//no less than 10 samples readout
+	int nSample = digiItr->size();
+	if (nSample != 10)   {
+	  cout << "EcalPedestal::analyze: Warning: N samples " << nSample
+	       << " channel " << iChannel
+	       << " side " << iz << " ix " << ix << " iy " << iy
+	       << " for event " << cnt_evt_ << endl;
+	  continue;
+	}
+
+	int arrayId = (expectedGain - kFirstGainId) * kEEChannels + iChannel; 
+	float adc[10];
+	float pedestalevent = 0.;
+	double pedestalevent2 = 0.;
+	if(iChannel == 10000) cout << " Xtal " << iChannel << " ADC:";
+	for (int iSample = 0; iSample < nSample; ++iSample) {
+	  int gainSample = df.sample(iSample).gainId();
+	  if(gainSample != gainId) {
+	    cout << "EcalPedestal::analyze: Warning: gain change for sample "
+		 << " EE channel " << iChannel
+		 << iSample << " gain " << gainSample
+		 << " side " << iz << " ix " << ix << " iy " << iy
+		 << " for event " << cnt_evt_ << endl;
+	  }
+	  adc[iSample] = float(df.sample(iSample).adc());
+	  if(iChannel == 10000) cout << " " << adc[iSample];
+	  pedestalevent += adc[iSample];
+	  pedestalevent2 += adc[iSample] * adc[iSample];
+	  if(cnt_evt_ > 400 && iChannel == 247) {
+	    //	    hPed248Evt->Fill((cnt_evt_ - 401)*10 + iSample,adc[iSample]);
+	    hPed248->Fill(adc[iSample]);
+	    hPed248sample->Fill(iSample,adc[iSample]);
+	  }
+
+	  if(gainId == 1) (*vCovMatEE)[iChannel]->Fill(iSample,adc[iSample]);
+	}  // sample
+	if(iChannel == 10000) cout << endl;
+	float avg = pedestalevent / nSample;
+	if(readPedestals_) {
+	  if(avg - PedestalReadEE_[arrayId] > cutStrange[gainId - 1]) {
+	    cout << " Strange event " << cnt_evt_ << " channel " << iChannel
+	      //	       << " val " << avg - PedestalReadEE_[arrayId] << " cut " << cutStrange[gainId] << " avg " << avg
+		 << " expected " << PedestalReadEE_[arrayId] << " samples :";
+	    for (int iSample = 0; iSample < nSample; ++iSample) {
+	      cout << " " << adc[iSample];
+	    }
+	    cout << endl;
+	    // do not use this channel
+	    continue;
+	  }
+	}
+	nEntriesStandardEE_[arrayId] += 10;
+	pedestalStandardEE_[arrayId] += pedestalevent;
+	pedestal2StandardEE_[arrayId] += pedestalevent2;
+
+	avgSamplesEE_[arrayId] += avg;
+	avgSample2EE_[arrayId] += avg * avg;
+	nEntriesAvgEE_[arrayId]++;
+	if(cnt_evt_ > 400 && iChannel == 247) {
+	  //	  hPed248LFEvt->Fill(cnt_evt_ - 401,avg);
+	  hPed248LF->Fill(avg);
+	}
+    
+	// Compute HF noise
+	for (int iSample = 0; iSample < nSample; ++iSample) {
+	  float adcHF = adc[iSample] - avg;
+	  pedavgEE_[arrayId] += adcHF;
+	  pedavg2EE_[arrayId] += adcHF * adcHF;
+	  if(gainId == 1) {
+	    hPedsample->Fill(iSample,adcHF);
+	    if(iChannel == 247) hPed248HF->Fill(adcHF);
+	  }
+	} 
+
+      }  // loop over digis
+    }//  End cap digis present
+    else
+      cout << " No EE digi in event " << cnt_evt_ << endl;
+  }
+
+  //GET THE UNCALIB RECHITS
+  if(ECALType_ == "EB" || ECALType_ == "EA") {
+    Handle< EBUncalibratedRecHitCollection > pEBUncalibRecHits;
+    const EBUncalibratedRecHitCollection*  EBuncalibRecHits = 0; 
+    try {
+      iEvent.getByLabel( EBuncalibRecHitCollection_, pEBUncalibRecHits );
+      EBuncalibRecHits = pEBUncalibRecHits.product(); // get a ptr to the product
+
+      EBDetId EBHitId(0); 
+      //      int nunhits = EBuncalibRecHits->size();
+      //      if(nunhits != kEBChannels) cout << " Uncalib hits size " << nunhits << endl;
+      //      if(nunhits != 61000) cout << " Uncalib hits size " << nunhits << endl;
+      for(EBUncalibratedRecHitCollection::const_iterator ithit = EBuncalibRecHits->begin(); ithit != EBuncalibRecHits->end(); ++ithit) {
+	EBHitId = ithit->id();
+	//	int xtalNumber = EBHitId.ic() - 1; 	// here xtalNumber runs from 0 to 1699
+	//	if(xtalNumber < 0 || xtalNumber > 1699) cout << " Crystal " << xtalNumber << endl;
+	int iChannel = EBHitId.hashedIndex();	// here iChannel runs from 0 to 61200
+	float HitAmp = ithit->amplitude();
+	if(iChannel == 248) hPed248Weights->Fill(HitAmp);
+	if(iChannel == 45784) hPed45784Weights->Fill(HitAmp);
+	//    if( cnt_evt_%50 == 0 && xtalNumber <= 10) cout << " Crystal " << xtalNumber 
+	//				   << " amplitude " << HitAmp << endl;
+	int arrayId = (expectedGain - kFirstGainId) * kEBChannels + iChannel; 
+	//      if(xtalNumber < 10) cout  << " Crystal " << xtalNumber << " id " << arrayId 
+	//				<< " amplitude hit " << HitAmp << endl;
+	nEntriesHit_[arrayId]++;
+	pedestalHit_[arrayId] += HitAmp;
+	pedestal2Hit_[arrayId] += HitAmp * HitAmp;
+      }//loop uncalib hits
+    } catch ( std::exception& ex ) {
+      std::cerr << "Error! can't get the product " << EBuncalibRecHitCollection_ << endl;
+      cout << "EcalPedestal error! can't get the product " << EBuncalibRecHitCollection_ << endl;
+    }
+    // second method MaxSample
+    Handle< EBUncalibratedRecHitCollection > pEBUncalibRecHitsMax;
+    const EBUncalibratedRecHitCollection*  EBuncalibRecHitsMax = 0; 
+    try {
+      iEvent.getByLabel( edm::InputTag("ecalMaxSampleUncalibRecHit:EcalUncalibRecHitsEB"), pEBUncalibRecHitsMax );
+      EBuncalibRecHitsMax = pEBUncalibRecHitsMax.product(); // get a ptr to the product
+
+      EBDetId EBHitId(0); 
+      for(EBUncalibratedRecHitCollection::const_iterator ithit = EBuncalibRecHitsMax->begin(); ithit != EBuncalibRecHitsMax->end(); ++ithit) {
+	EBHitId = ithit->id();
+	int iChannel = EBHitId.hashedIndex();  	// here iChannel runs from 0 to 61199
+	float HitAmp = ithit->amplitude();
+	if(iChannel == 248) hPed248Max->Fill(HitAmp);
+	if(iChannel == 45784) hPed45784Max->Fill(HitAmp);
+	int arrayId = (expectedGain - kFirstGainId) * kEBChannels + iChannel;
+	nEntriesMinMax_[arrayId]++;
+	pedestalMinMax_[arrayId] += HitAmp;
+	pedestal2MinMax_[arrayId] += HitAmp * HitAmp;
+      }//loop uncalib hits
+    } catch ( std::exception& ex ) {
+      cout << "EcalCosmics error! can't get ecalMaxSampleUncalibRecHit:EcalUncalibRecHitsEB" << endl;
+    }
+    // third method AlphaBetaFit
+    Handle< EBUncalibratedRecHitCollection > pEBUncalibRecHitsFit;
+    const EBUncalibratedRecHitCollection*  EBuncalibRecHitsFit = 0; 
+    try {
+      iEvent.getByLabel( edm::InputTag("ecalFixedAlphaBetaFitUncalibRecHit:EcalUncalibRecHitsEB"), pEBUncalibRecHitsFit );
+      EBuncalibRecHitsFit = pEBUncalibRecHitsFit.product(); // get a ptr to the product
+
+      EBDetId EBHitId(0); 
+      for(EBUncalibratedRecHitCollection::const_iterator ithit = EBuncalibRecHitsFit->begin(); ithit != EBuncalibRecHitsFit->end(); ++ithit) {
+	EBHitId = ithit->id();
+	int iChannel = EBHitId.hashedIndex();  	// here iChannel runs from 0 to 61199
+	float HitAmp = ithit->amplitude();
+	if(runType_ == "Ped_6") {  // gain 6
+	  //	  if((iChannel < 3240 || iChannel > 3244) && HitAmp > 1000.) 
+	  //	    cout << " Channel " << iChannel << " event " << ievt << " Fit amplitude " << HitAmp << endl;
+	}
+	else {  // gain 12
+	  if(iChannel != 54145 && HitAmp > 4000.) 
+	    cout << " Channel " << iChannel << " event " << ievt << " Fit amplitude " << HitAmp << endl;
+	}
+      }//loop uncalib hits
+    } catch ( std::exception& ex ) {
+      cout << "EcalCosmics error! can't get ecalFixedAlphaBetaFitUncalibRecHit:EcalUncalibRecHitsEB" << endl;
+    }
+  }  // barrel
+
+  if(ECALType_ == "EE" || ECALType_ == "EA") { // endcaps
+    Handle< EEUncalibratedRecHitCollection > pEEUncalibRecHits;
+    const EEUncalibratedRecHitCollection*  EEuncalibRecHits = 0; 
+    try {
+      iEvent.getByLabel( EEuncalibRecHitCollection_, pEEUncalibRecHits );
+      EEuncalibRecHits = pEEUncalibRecHits.product(); // get a ptr to the product
+
+      EEDetId EEHitId(0); 
+      //      int nunhits = EEuncalibRecHits->size();
+      //      if(nunhits != kEEChannels) cout << " Uncalib hits size " << nunhits << endl;
+      for(EEUncalibratedRecHitCollection::const_iterator ithit = EEuncalibRecHits->begin(); ithit != EEuncalibRecHits->end(); ++ithit) {
+	EEHitId = ithit->id();
+	int iChannel = EEHitId.hashedIndex();    // here iChannel runs from 0 to 14647
+	if(iChannel >= kEEChannels) {
+	  cout << " ****** Error ****** EE channel " << iChannel << endl;
+	  continue;
+	}
+	//	int iz = EEHitId.zside();
+	//	int ix = EEHitId.ix();
+	//	int iy = EEHitId.iy();
+	//	if(ix%10 == 0 && iy%10 == 0) cout << " side " << iz << " ix " << ix << " iy " << iy;
+	float HitAmp = ithit->amplitude();
+	//	if(ix%10 == 0 && iy%10 == 0) cout << " amplitude " << HitAmp << endl;
+	int arrayId = (expectedGain - kFirstGainId) * kEEChannels + iChannel; 
+	nEntriesHitEE_[arrayId]++;
+	pedestalHitEE_[arrayId] += HitAmp;
+	pedestal2HitEE_[arrayId] += HitAmp * HitAmp;
+      }//loop uncalib hits
+    } catch ( std::exception& ex ) {
+      std::cerr << "Error! can't get the product " << EEuncalibRecHitCollection_ << endl;
+      cout << "EcalPedestal error! can't get the product " << EEuncalibRecHitCollection_ << endl;
+    }
+  }  // endcap
+
+  //uncalib rechits
+
+  //  cout << "Exiting analyze" << endl;
+}//analyze
+
+//define this as a plug-in
+DEFINE_FWK_MODULE( EcalPedestal );

@@ -1,0 +1,144 @@
+/**\class EcalPedestal
+*/
+//
+// $Id: EcalEcalPedestal.cc,v 0.0 2006/11/17 19:01:00 fay Exp $
+//
+#include "Pit/Pedestal/interface/EcalPedestal.h"
+
+#include "DataFormats/EcalRecHit/interface/EcalUncalibratedRecHit.h"
+#include "DataFormats/EcalRecHit/interface/EcalRecHitCollections.h"
+#include "DataFormats/EcalDigi/interface/EcalDigiCollections.h"
+#include "TBDataFormats/EcalTBObjects/interface/EcalTBTDCRecInfo.h"
+#include "TBDataFormats/EcalTBObjects/interface/EcalTBEventHeader.h"
+#include "TBDataFormats/EcalTBObjects/interface/EcalTBTDCSample.h" 
+#include "TBDataFormats/EcalTBObjects/interface/EcalTBTDCRawInfo.h"
+#include "DataFormats/EcalDetId/interface/EBDetId.h"
+#include <DataFormats/EcalRawData/interface/EcalRawDataCollections.h>
+
+#include <iostream>
+#include <iomanip>
+#include <string>
+#include <stdexcept>
+
+using namespace edm;
+using namespace cms;
+using namespace std;
+  
+//
+// constants, enums and typedefs
+//
+// static data member definitions
+//
+
+//
+// constructors and destructor
+//
+
+
+//====================================================================
+EcalPedestal::EcalPedestal( const edm::ParameterSet& iConfig )
+//====================================================================
+{
+   //now do what ever initialization is needed   
+  //  EBDigiCollection_          = iConfig.getParameter<edm::InputTag>("EBDigiCollection");
+  runnumber_                 = iConfig.getUntrackedParameter<int>("runnumber",-1);
+
+  vector<int> listDefaults;
+  listDefaults.push_back(-1);  
+
+  cnt_evt_ = 0;
+
+  //  cout << "Exiting constructor" << endl;
+}//constructor
+
+
+//========================================================================
+EcalPedestal::~EcalPedestal()
+//========================================================================
+{
+  cout << "ANALYSIS FINISHED" << endl;
+}//destructor
+
+//========================================================================
+void EcalPedestal::beginRun(edm::Run const &, edm::EventSetup const & c) {
+///========================================================================
+
+  cout << "Entering beginRun" << endl;
+  cout << "Exiting beginRun" << endl;
+}//beginRun
+
+//========================================================================
+void EcalPedestal::beginJob() {
+///========================================================================
+  for(int i = 0; i < 10; i++)
+    nevent[i] = 0;
+  cout << "Entering beginJob" << endl;
+  cout << "Exiting beginJob" << endl;
+}//beginJob
+
+//========================================================================
+void
+EcalPedestal::endJob() {
+//========================================================================
+
+  cout << "Entering endJob" << endl;
+
+  cout << " Nb EB events         " << nevent[0] << endl
+       << " Nb EE events         " << nevent[5] << endl;
+
+  cout << "Exiting endJob" << endl;
+}//endJob
+
+//
+// member functions
+//
+
+//========================================================================
+void
+EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup ) {
+//========================================================================
+  int ievt = iEvent.id().event();
+  int lumi = iEvent.id().luminosityBlock();
+  Timestamp evtime = iEvent.time();
+
+  cnt_evt_++;
+  time_t unix = evtime.unixTime();
+  char buf[256];
+  strftime(buf, sizeof(buf), "%F %R:%S", gmtime(&unix));
+  cout << "Running on event = " << ievt << " at " << cnt_evt_ << " (UTC) " << buf << "." << evtime.microsecondOffset() << " lumi block " << lumi << endl;
+  //GET THE DIGIS
+  int nebd = 0;
+  int need = 0;
+  const EBDigiCollection* EBdigis = 0;
+  const EEDigiCollection* EEdigis = 0;
+  Handle< EBDigiCollection > pEBdigis;
+  try {
+    iEvent.getByLabel("ecalEBunpacker", "ebDigis", pEBdigis);
+    EBdigis = pEBdigis.product(); // get a ptr to the product
+    nebd = EBdigis->size();
+  } catch ( std::exception& ex ) {
+    cerr << "Error! can't get the product ebDigis" << endl;
+    cout << "Event = " << cnt_evt_ << " EcalPedestal ebDigis not available" << endl;
+  } //getting barrel digis
+
+    // endcaps
+  Handle< EEDigiCollection > pEEdigis;
+  try {
+    iEvent.getByLabel("ecalEBunpacker", "eeDigis", pEEdigis);
+    EEdigis = pEEdigis.product(); // get a ptr to the product
+    need = EEdigis->size();
+  } catch ( std::exception& ex ) {
+    cerr << "Event = " << cnt_evt_ << "Error! can't get the product eeDigis" << endl;
+    cout << "Event = " << cnt_evt_ << " EcalPedestal eeDigis not available" << endl;
+  } //getting endcap digis
+
+  if(nebd != 0 || need != 0) cout << " Nb digi in EB  " << nebd << " EE " << need << endl;
+  if(nebd != 0)  nevent[0]++;  //  Barrel digis present
+  else cout << " No EB digi in event " << cnt_evt_ << endl;
+
+  if(need != 0) nevent[5]++;   //  End cap digis present
+  else cout << " No EE digi in event " << cnt_evt_ << endl;
+}//analyze
+
+//define this as a plug-in
+DEFINE_FWK_MODULE( EcalPedestal );

@@ -1701,18 +1701,13 @@ EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup )
 	//cout<<"det ieta iphi "<<ieta<<" "<<iphi<<endl;
 	///https://cmssdt.cern.ch/lxr/source/RecoMET/METFilters/plugins/EcalBadCalibFilter.cc
 
-	double rheta = -99;
-	double rhphi = -99;
-	if (! (it == barrelRecHitsHandle->end()) ){ 
-	  const GlobalPoint & rechitPoint = geo->getPosition(det);
-	  //std::cout<<"Printing the values "<<endl;
-	  
-	  
-	  double rheta = rechitPoint.eta();
-	  double rhphi = rechitPoint.phi();
-	  
-	  //std::cout<<"Eta : Phi "<<rheta<<" "<<rhphi<<std::endl;
-	}
+	const GlobalPoint & rechitPoint = geo->getPosition(det);
+	//std::cout<<"Printing the values "<<endl;
+	
+	
+	double rheta = rechitPoint.eta();
+	double rhphi = rechitPoint.phi();
+	
 
 	////////////SJ
 	
@@ -1981,11 +1976,10 @@ EcalPedestal::analyze( const edm::Event& iEvent, const edm::EventSetup& iSetup )
 	double rheta = -99;
 	double rhphi = -99; 
 
-	if (! (it == endcapRecHitsHandle->end()) ){  
-	  const GlobalPoint & rechitPoint = geo->getPosition(det);
-	  rheta = rechitPoint.eta();
-	  rhphi = rechitPoint.phi();
-	}
+	const GlobalPoint & rechitPoint = geo->getPosition(det);
+	rheta = rechitPoint.eta();
+	rhphi = rechitPoint.phi();
+
 
 	////////////SJ
 
